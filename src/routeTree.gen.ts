@@ -9,38 +9,141 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as MypageRouteImport } from './routes/mypage'
+import { Route as HomeRouteImport } from './routes/home'
+import { Route as CreateRouteImport } from './routes/create'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as VoteIdRouteImport } from './routes/vote.$id'
+import { Route as ShareIdRouteImport } from './routes/share.$id'
+import { Route as ResultIdRouteImport } from './routes/result.$id'
 
+const MypageRoute = MypageRouteImport.update({
+  id: '/mypage',
+  path: '/mypage',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HomeRoute = HomeRouteImport.update({
+  id: '/home',
+  path: '/home',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CreateRoute = CreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VoteIdRoute = VoteIdRouteImport.update({
+  id: '/vote/$id',
+  path: '/vote/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShareIdRoute = ShareIdRouteImport.update({
+  id: '/share/$id',
+  path: '/share/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResultIdRoute = ResultIdRouteImport.update({
+  id: '/result/$id',
+  path: '/result/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/create': typeof CreateRoute
+  '/home': typeof HomeRoute
+  '/mypage': typeof MypageRoute
+  '/result/$id': typeof ResultIdRoute
+  '/share/$id': typeof ShareIdRoute
+  '/vote/$id': typeof VoteIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/create': typeof CreateRoute
+  '/home': typeof HomeRoute
+  '/mypage': typeof MypageRoute
+  '/result/$id': typeof ResultIdRoute
+  '/share/$id': typeof ShareIdRoute
+  '/vote/$id': typeof VoteIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/create': typeof CreateRoute
+  '/home': typeof HomeRoute
+  '/mypage': typeof MypageRoute
+  '/result/$id': typeof ResultIdRoute
+  '/share/$id': typeof ShareIdRoute
+  '/vote/$id': typeof VoteIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/create'
+    | '/home'
+    | '/mypage'
+    | '/result/$id'
+    | '/share/$id'
+    | '/vote/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/create'
+    | '/home'
+    | '/mypage'
+    | '/result/$id'
+    | '/share/$id'
+    | '/vote/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/create'
+    | '/home'
+    | '/mypage'
+    | '/result/$id'
+    | '/share/$id'
+    | '/vote/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CreateRoute: typeof CreateRoute
+  HomeRoute: typeof HomeRoute
+  MypageRoute: typeof MypageRoute
+  ResultIdRoute: typeof ResultIdRoute
+  ShareIdRoute: typeof ShareIdRoute
+  VoteIdRoute: typeof VoteIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/mypage': {
+      id: '/mypage'
+      path: '/mypage'
+      fullPath: '/mypage'
+      preLoaderRoute: typeof MypageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/home': {
+      id: '/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof HomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/create': {
+      id: '/create'
+      path: '/create'
+      fullPath: '/create'
+      preLoaderRoute: typeof CreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,22 +151,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/vote/$id': {
+      id: '/vote/$id'
+      path: '/vote/$id'
+      fullPath: '/vote/$id'
+      preLoaderRoute: typeof VoteIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/share/$id': {
+      id: '/share/$id'
+      path: '/share/$id'
+      fullPath: '/share/$id'
+      preLoaderRoute: typeof ShareIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/result/$id': {
+      id: '/result/$id'
+      path: '/result/$id'
+      fullPath: '/result/$id'
+      preLoaderRoute: typeof ResultIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CreateRoute: CreateRoute,
+  HomeRoute: HomeRoute,
+  MypageRoute: MypageRoute,
+  ResultIdRoute: ResultIdRoute,
+  ShareIdRoute: ShareIdRoute,
+  VoteIdRoute: VoteIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { AppHeader } from "../components/AppHeader";
 
 function NotFoundComponent() {
   return (
@@ -77,20 +78,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Pickly — 친구들의 반응으로 베스트컷을 찾아보세요" },
+      { name: "description", content: "여러 장의 사진 중 어떤 사진을 SNS·프로필·썸네일로 올릴지 친구들의 투표와 AI 분석으로 결정하세요." },
+      { name: "author", content: "Pickly" },
+      { name: "theme-color", content: "#0F172A" },
+      { property: "og:title", content: "Pickly — 친구들의 반응으로 베스트컷을 찾아보세요" },
+      { property: "og:description", content: "친구들의 스와이프 투표 + AI 분석으로 최적의 사진을 골라드려요." },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Pickly" },
+      { name: "twitter:description", content: "친구들의 반응으로 베스트컷을 찾아보세요." },
     ],
     links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
+      { rel: "stylesheet", href: appCss },
+      { rel: "stylesheet", href: "https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" },
     ],
   }),
   shellComponent: RootShell,
@@ -118,8 +119,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <div className="min-h-screen bg-background text-foreground">
+        <AppHeader />
+        <Outlet />
+      </div>
     </QueryClientProvider>
   );
 }
