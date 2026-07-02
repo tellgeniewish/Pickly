@@ -60,24 +60,40 @@ function Login() {
 }
 
 function SocialButton({ provider }: { provider: "google" | "kakao" | "naver" | "apple" }) {
-  const styles = {
-    google: { bg: "bg-white", text: "text-[#1f1f1f]", label: "G" },
-    kakao: { bg: "bg-[#FEE500]", text: "text-[#191600]", label: "K" },
-    naver: { bg: "bg-[#03C75A]", text: "text-white", label: "N" },
-    apple: { bg: "bg-white", text: "text-black", label: "" },
-  } as const;
-  const s = styles[provider];
+  const bg = {
+    google: "bg-white",
+    kakao: "bg-[#FEE500]",
+    naver: "bg-[#03C75A]",
+    apple: "bg-white",
+  }[provider];
+
   return (
     <button
       aria-label={`${provider} 로그인`}
-      className={`size-14 rounded-full ${s.bg} ${s.text} flex items-center justify-center text-xl font-bold shadow-lg shadow-black/30 transition-transform active:scale-95`}
+      className={`size-14 rounded-full ${bg} flex items-center justify-center shadow-lg shadow-black/30 transition-transform active:scale-95`}
     >
-      {provider === "apple" ? (
-        <svg viewBox="0 0 24 24" fill="currentColor" className="size-6">
-          <path d="M16.365 1.43c0 1.14-.4 2.21-1.1 3.04-.74.86-1.94 1.53-3.13 1.43-.13-1.11.46-2.27 1.1-3 .72-.85 1.96-1.45 3.13-1.47zM20.5 17.18c-.55 1.21-.81 1.75-1.52 2.83-.99 1.5-2.38 3.37-4.11 3.39-1.54.02-1.94-1-4.03-1-2.09 0-2.53.98-4.06 1-1.74.05-3.06-1.62-4.05-3.12C.7 16.85-.42 11.55 1.94 8.13c1.16-1.69 3.12-2.74 4.93-2.74 1.83 0 3 1 4.51 1 1.47 0 2.36-1 4.49-1 1.6 0 3.3.87 4.51 2.37-3.96 2.17-3.32 7.84.12 9.42z" />
+      {provider === "google" && (
+        <svg viewBox="0 0 24 24" className="size-7" aria-hidden="true">
+          <path fill="#4285F4" d="M23.5 12.27c0-.79-.07-1.54-.2-2.27H12v4.51h6.47c-.28 1.4-1.12 2.59-2.39 3.39v2.82h3.86c2.26-2.08 3.56-5.15 3.56-8.45z"/>
+          <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.94-2.91l-3.86-2.82c-1.07.72-2.45 1.15-4.08 1.15-3.13 0-5.79-2.11-6.74-4.96H1.28v3.11C3.26 21.3 7.31 24 12 24z"/>
+          <path fill="#FBBC05" d="M5.26 14.46c-.24-.72-.38-1.49-.38-2.28s.14-1.56.38-2.28V6.79H1.28C.46 8.42 0 10.16 0 12s.46 3.58 1.28 5.21l3.98-2.75z"/>
+          <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.28 6.79l3.98 3.11C6.21 6.86 8.87 4.75 12 4.75z"/>
         </svg>
-      ) : (
-        s.label
+      )}
+      {provider === "kakao" && (
+        <svg viewBox="0 0 24 24" className="size-7" aria-hidden="true">
+          <path fill="#191600" d="M12 3C6.48 3 2 6.58 2 10.99c0 2.86 1.88 5.36 4.71 6.78-.2.7-.72 2.6-.83 3.01-.13.51.19.5.4.36.16-.1 2.6-1.77 3.65-2.48.68.1 1.37.15 2.07.15 5.52 0 10-3.58 10-7.99S17.52 3 12 3z"/>
+        </svg>
+      )}
+      {provider === "naver" && (
+        <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
+          <path fill="#fff" d="M16.27 12.84 7.65 0H0v24h7.73V11.16L16.35 24H24V0h-7.73z"/>
+        </svg>
+      )}
+      {provider === "apple" && (
+        <svg viewBox="0 0 24 24" fill="black" className="size-7" aria-hidden="true">
+          <path d="M16.365 1.43c0 1.14-.4 2.21-1.1 3.04-.74.86-1.94 1.53-3.13 1.43-.13-1.11.46-2.27 1.1-3 .72-.85 1.96-1.45 3.13-1.47zM20.5 17.18c-.55 1.21-.81 1.75-1.52 2.83-.99 1.5-2.38 3.37-4.11 3.39-1.54.02-1.94-1-4.03-1-2.09 0-2.53.98-4.06 1-1.74.05-3.06-1.62-4.05-3.12C.7 16.85-.42 11.55 1.94 8.13c1.16-1.69 3.12-2.74 4.93-2.74 1.83 0 3 1 4.51 1 1.47 0 2.36-1 4.49-1 1.6 0 3.3.87 4.51 2.37-3.96 2.17-3.32 7.84.12 9.42z"/>
+        </svg>
       )}
     </button>
   );
