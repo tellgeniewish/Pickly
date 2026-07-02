@@ -1,6 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Download, Sparkles } from "lucide-react";
-import { sampleVote, aiInsight } from "@/lib/mock-data";
+import { Loader2, Share2, Sparkles } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { getVoteResults, runAiAnalysis } from "@/lib/votes.functions";
 
 export const Route = createFileRoute("/result/$id")({
   head: () => ({ meta: [{ title: "Pickly — 결과 보기" }] }),
@@ -10,24 +13,57 @@ export const Route = createFileRoute("/result/$id")({
 const rankBadges = ["🥇", "🥈", "🥉"];
 
 function Result() {
-  const sorted = [...sampleVote.photos].sort((a, b) => b.recommend - a.recommend);
+  const { id } = Route.useParams();
+  const qc = useQueryClient();
+  const fetchResults = useServerFn(getVoteResults);
+  const runAi = useServerFn(runAiAnalysis);
+
+  const q = useQuery({
+    queryKey: ["results", id],
+    queryFn: () => fetchResults({ data: { id } }),
+  });
+
+  const ai = useMutation({
+    mutationFn: () => runAi({ data: { id } }),
+    onSuccess: () => {
+      toast.success("AI 분석 완료!");
+      qc.invalidateQueries({ queryKey: ["results", id] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "분석 실패"),
+  });
+
+  if (q.isLoading)
+    return <main className="mx-auto max-w-md px-5 pt-10 text-center text-muted-foreground">불러오는 중...</main>;
+  if (!q.data) return <main className="mx-auto max-w-md px-5 pt-10 text-center">투표를 찾을 수 없어요.</main>;
+
+  const { vote, participantCount, ranked, ai: aiData } = q.data;
+
+  const share = async () => {
+    const url = `${window.location.origin}/vote/${id}`;
+    if (navigator.share) navigator.share({ title: vote.title, url }).catch(() => {});
+    else {
+      await navigator.clipboard.writeText(url);
+      toast.success("링크가 복사됐어요!");
+    }
+  };
 
   return (
     <main className="mx-auto max-w-md px-5 pt-4 pb-32 space-y-7">
-      {/* Header */}
       <header>
-        <h1 className="text-2xl font-bold leading-tight">{sampleVote.title}</h1>
+        <h1 className="text-2xl font-bold leading-tight">{vote.title}</h1>
         <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-          <span>{sampleVote.location}</span>
-          <span>·</span>
+          {vote.location_name && (
+            <>
+              <span>📍 {vote.location_name}</span>
+              <span>·</span>
+            </>
+          )}
           <span>
-            총 <span className="text-foreground font-semibold">{sampleVote.participants}명</span>의
-            친구가 참여
+            총 <span className="text-foreground font-semibold">{participantCount}명</span> 참여
           </span>
         </div>
       </header>
 
-      {/* AI Insight */}
       <section className="relative surface-card p-5 overflow-hidden">
         <div className="absolute -top-16 -right-16 size-48 rounded-full bg-secondary/20 blur-3xl pointer-events-none" />
         <div className="flex items-center gap-2">
@@ -36,45 +72,69 @@ function Result() {
           </div>
           <h2 className="font-semibold">AI 분석</h2>
           <span className="ml-auto text-[10px] text-muted-foreground px-1.5 py-0.5 rounded bg-muted">
-            GPT-4o Vision
+            Gemini Vision
           </span>
         </div>
-        <p className="mt-3 text-sm leading-relaxed text-foreground/90">{aiInsight.summary}</p>
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          {aiInsight.spaceKeywords.map((k) => (
-            <span
-              key={k}
-              className="text-xs font-medium bg-gradient-brand-soft border border-primary/30 text-primary px-2.5 py-1 rounded-full"
+
+        {aiData ? (
+          <>
+            <p className="mt-3 text-sm leading-relaxed text-foreground/90">{aiData.summary}</p>
+            {Array.isArray(aiData.space_keywords) && aiData.space_keywords.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {(aiData.space_keywords as string[]).map((k) => (
+                  <span
+                    key={k}
+                    className="text-xs font-medium bg-gradient-brand-soft border border-primary/30 text-primary px-2.5 py-1 rounded-full"
+                  >
+                    #{k}
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="mt-3 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              친구들의 반응을 바탕으로 왜 이 사진들이 좋았는지 AI가 분석해드려요.
+            </p>
+            <button
+              onClick={() => ai.mutate()}
+              disabled={ai.isPending || participantCount === 0}
+              className="w-full rounded-[14px] bg-gradient-brand py-3 font-semibold text-background text-sm flex items-center justify-center gap-2 disabled:opacity-60"
             >
-              #{k}
-            </span>
-          ))}
-        </div>
+              {ai.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+              {ai.isPending ? "분석 중..." : participantCount === 0 ? "표가 모이면 분석 가능해요" : "AI 분석 실행"}
+            </button>
+          </div>
+        )}
       </section>
 
-      {/* Ranking */}
       <section className="space-y-3">
         <h2 className="font-semibold">베스트컷 랭킹</h2>
-        {sorted.map((p, i) => (
+        {ranked.map((p, i) => (
           <RankCard
             key={p.id}
             rank={i + 1}
             url={p.url}
-            recommend={p.recommend}
-            analysis={aiInsight.topAnalysis[i]}
+            rate={p.rate}
+            likes={p.likes}
+            total={p.total}
+            analysis={aiData && Array.isArray(aiData.top_analysis) ? (aiData.top_analysis as Array<Record<string, string | number>>)[i] : undefined}
           />
         ))}
+        {ranked.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">사진이 없어요.</p>
+        )}
       </section>
 
-      {/* Save */}
-      <button className="w-full rounded-[14px] border border-border bg-muted/40 py-3.5 font-medium text-sm flex items-center justify-center gap-2">
-        <Download className="size-4" /> 결과 이미지 저장
+      <button
+        onClick={share}
+        className="w-full rounded-[14px] border border-border bg-muted/40 py-3.5 font-medium text-sm flex items-center justify-center gap-2"
+      >
+        <Share2 className="size-4" /> 링크 다시 공유
       </button>
 
-      <Link
-        to="/home"
-        className="block text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
-      >
+      <Link to="/home" className="block text-center text-sm text-muted-foreground underline-offset-4 hover:underline">
         홈으로
       </Link>
     </main>
@@ -82,55 +142,43 @@ function Result() {
 }
 
 function RankCard({
-  rank,
-  url,
-  recommend,
-  analysis,
+  rank, url, rate, likes, total, analysis,
 }: {
   rank: number;
   url: string;
-  recommend: number;
-  analysis?: (typeof aiInsight.topAnalysis)[number];
+  rate: number;
+  likes: number;
+  total: number;
+  analysis?: Record<string, string | number>;
 }) {
-  const isTop = rank <= 3;
+  const pct = Math.round(rate * 100);
   return (
-    <div
-      className={`surface-card overflow-hidden ${
-        rank === 1 ? "ring-2 ring-primary/50 glow-primary" : ""
-      }`}
-    >
+    <div className={`surface-card overflow-hidden ${rank === 1 ? "ring-2 ring-primary/50 glow-primary" : ""}`}>
       <div className="flex gap-3 p-3">
         <div className="relative shrink-0 w-24 aspect-[3/4] rounded-xl overflow-hidden">
-          <img
-            src={url}
-            alt={`${rank}위 사진`}
-            loading="lazy"
-            className="absolute inset-0 size-full object-cover"
-          />
+          <img src={url} alt={`${rank}위 사진`} className="absolute inset-0 size-full object-cover" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xl">{isTop ? rankBadges[rank - 1] : ""}</span>
+            <span className="text-xl">{rank <= 3 ? rankBadges[rank - 1] : ""}</span>
             <span className="font-bold">{rank}위</span>
-            <span className="ml-auto text-lg font-bold text-gradient">{recommend}%</span>
+            <span className="ml-auto text-lg font-bold text-gradient">{pct}%</span>
           </div>
           <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full bg-gradient-brand"
-              style={{ width: `${recommend}%` }}
-            />
+            <div className="h-full bg-gradient-brand" style={{ width: `${pct}%` }} />
           </div>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            {likes} / {total} 좋음
+          </p>
           {analysis && (
-            <ul className="mt-3 space-y-1 text-[11px] text-muted-foreground">
-              <li>
-                <span className="text-foreground/70">구도</span> · {analysis.구도}
-              </li>
-              <li>
-                <span className="text-foreground/70">표정</span> · {analysis.표정}
-              </li>
-              <li>
-                <span className="text-foreground/70">조명</span> · {analysis.조명}
-              </li>
+            <ul className="mt-2 space-y-0.5 text-[11px] text-muted-foreground">
+              {["구도", "표정", "조명"].map((k) =>
+                analysis[k] ? (
+                  <li key={k}>
+                    <span className="text-foreground/70">{k}</span> · {String(analysis[k])}
+                  </li>
+                ) : null,
+              )}
             </ul>
           )}
         </div>

@@ -5,8 +5,6 @@ import { cn } from "@/lib/utils";
 
 export function AppHeader() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-
-  // Hide on login page
   if (pathname === "/") return null;
 
   return (
@@ -31,21 +29,13 @@ export function AppHeader() {
   );
 }
 
-function NavIcon({
-  to,
-  icon: Icon,
-  active,
-}: {
-  to: string;
-  icon: typeof Home;
-  active: boolean;
-}) {
+function NavIcon({ to, icon: Icon, active }: { to: string; icon: typeof Home; active: boolean }) {
   return (
     <Link
       to={to}
       className={cn(
         "size-10 rounded-full flex items-center justify-center transition-colors",
-        active ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
+        active ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground",
       )}
     >
       <Icon className="size-5" />
