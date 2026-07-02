@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Check, Copy, MessageCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/share/$id")({
   head: () => ({ meta: [{ title: "Pickly — 투표 공유" }] }),
@@ -10,7 +10,11 @@ export const Route = createFileRoute("/share/$id")({
 function Share() {
   const { id } = Route.useParams();
   const [copied, setCopied] = useState(false);
-  const url = `https://pickly.app/vote/${id}`;
+  const [url, setUrl] = useState(`/vote/${id}`);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") setUrl(`${window.location.origin}/vote/${id}`);
+  }, [id]);
 
   const onCopy = async () => {
     try {
@@ -22,9 +26,17 @@ function Share() {
     }
   };
 
+  const shareText = `Pickly에서 사진 골라주세요 → ${url}`;
+  const kakaoShare = () => {
+    if (navigator.share) {
+      navigator.share({ title: "Pickly 투표", text: shareText, url }).catch(() => {});
+    } else {
+      onCopy();
+    }
+  };
+
   return (
     <main className="mx-auto max-w-md px-5 pt-10 pb-16 flex flex-col items-center text-center">
-      {/* Success */}
       <div className="relative">
         <div className="absolute inset-0 -z-10 blur-3xl bg-primary/40 rounded-full" />
         <div className="size-24 rounded-full bg-gradient-brand flex items-center justify-center glow-primary">
@@ -37,7 +49,6 @@ function Share() {
         링크를 친구들에게 공유하고 반응을 받아보세요.
       </p>
 
-      {/* URL */}
       <div className="mt-8 w-full surface-card p-2 pl-4 flex items-center gap-2">
         <span className="flex-1 truncate text-sm text-muted-foreground text-left">{url}</span>
         <button
@@ -56,13 +67,13 @@ function Share() {
         </button>
       </div>
 
-      {/* Kakao share */}
-      <button className="mt-3 w-full rounded-[14px] bg-[#FEE500] text-[#191600] py-4 font-semibold flex items-center justify-center gap-2">
-        <MessageCircle className="size-5" />
-        카카오톡으로 공유
+      <button
+        onClick={kakaoShare}
+        className="mt-3 w-full rounded-[14px] bg-[#FEE500] text-[#191600] py-4 font-semibold flex items-center justify-center gap-2"
+      >
+        <MessageCircle className="size-5" /> 친구에게 공유하기
       </button>
 
-      {/* Secondary */}
       <Link
         to="/vote/$id"
         params={{ id }}

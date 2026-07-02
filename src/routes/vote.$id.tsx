@@ -1,31 +1,60 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Heart, X } from "lucide-react";
 import { useState } from "react";
-import { sampleVote } from "@/lib/mock-data";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { getVote, submitVote } from "@/lib/votes.functions";
+import { getAnonKey, getAnonName } from "@/lib/anon";
 
 export const Route = createFileRoute("/vote/$id")({
   head: () => ({ meta: [{ title: "Pickly — 투표하기" }] }),
   component: VotePage,
 });
 
-type Choice = "like" | "skip";
+type Choice = { photoId: string; liked: boolean };
 
 function VotePage() {
-  const photos = sampleVote.photos;
+  const { id } = Route.useParams();
+  const fetchVote = useServerFn(getVote);
+  const submit = useServerFn(submitVote);
+
+  const q = useQuery({ queryKey: ["vote", id], queryFn: () => fetchVote({ data: { id } }) });
   const [idx, setIdx] = useState(0);
   const [history, setHistory] = useState<Choice[]>([]);
   const [done, setDone] = useState(false);
-  const [drag, setDrag] = useState(0); // -1..1
+  const [drag, setDrag] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
 
+  if (q.isLoading)
+    return <main className="mx-auto max-w-md px-5 pt-10 text-center text-muted-foreground">불러오는 중...</main>;
+  if (!q.data)
+    return <main className="mx-auto max-w-md px-5 pt-10 text-center">투표를 찾을 수 없어요.</main>;
+
+  const { vote, photos } = q.data;
   const total = photos.length;
   const current = photos[idx];
 
-  const advance = (choice: Choice) => {
-    const next = [...history, choice];
+  const advance = async (liked: boolean) => {
+    if (!current) return;
+    const next = [...history, { photoId: current.id, liked }];
     setHistory(next);
     setDrag(0);
     if (idx + 1 >= total) {
-      setDone(true);
+      setSubmitting(true);
+      try {
+        const anonKey = getAnonKey();
+        if (!anonKey) throw new Error("브라우저 저장소를 사용할 수 없어요.");
+        await submit({
+          data: { voteId: id, anonKey, displayName: getAnonName(), choices: next },
+        });
+        setDone(true);
+      } catch (e) {
+        console.error(e);
+        toast.error(e instanceof Error ? e.message : "제출 실패");
+      } finally {
+        setSubmitting(false);
+      }
     } else {
       setIdx(idx + 1);
     }
@@ -40,33 +69,24 @@ function VotePage() {
 
   return (
     <main className="mx-auto max-w-md min-h-[calc(100vh-4rem)] px-5 pt-4 pb-8 flex flex-col">
-      {/* Top: progress */}
       <div className="flex items-center gap-3">
-        <Link
-          to="/home"
-          className="size-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground"
-        >
+        <Link to="/home" className="size-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
           <ArrowLeft className="size-4" />
         </Link>
         <div className="flex-1">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs text-muted-foreground">{sampleVote.title}</span>
-            <span className="text-xs font-semibold">
-              {Math.min(idx + (done ? 1 : 1), total)} / {total}
-            </span>
+            <span className="text-xs text-muted-foreground truncate">{vote.title}</span>
+            <span className="text-xs font-semibold">{Math.min(idx + 1, total)} / {total}</span>
           </div>
           <div className="h-1.5 rounded-full bg-muted overflow-hidden">
             <div
               className="h-full bg-gradient-brand transition-all duration-300"
-              style={{
-                width: `${((done ? total : idx) / total) * 100}%`,
-              }}
+              style={{ width: `${((done ? total : idx) / total) * 100}%` }}
             />
           </div>
         </div>
       </div>
 
-      {/* Card area */}
       <div className="flex-1 flex items-center justify-center py-6 relative">
         {!done && current && (
           <SwipeCard
@@ -74,30 +94,29 @@ function VotePage() {
             url={current.url}
             drag={drag}
             onDrag={setDrag}
-            onLike={() => advance("like")}
-            onSkip={() => advance("skip")}
+            onLike={() => advance(true)}
+            onSkip={() => advance(false)}
           />
         )}
-        {done && <DoneCard total={total} />}
+        {done && (
+          <DoneCard voteId={id} submitting={submitting} />
+        )}
       </div>
 
-      {/* Actions */}
       {!done && (
         <>
           <div className="flex items-center justify-center gap-5">
-            <ActionButton variant="skip" onClick={() => advance("skip")} />
+            <ActionButton variant="skip" onClick={() => advance(false)} disabled={submitting} />
             <button
               onClick={undo}
-              disabled={history.length === 0}
+              disabled={history.length === 0 || submitting}
               className="text-xs text-muted-foreground disabled:opacity-40 px-3 py-2"
             >
               ↶ 되돌리기
             </button>
-            <ActionButton variant="like" onClick={() => advance("like")} />
+            <ActionButton variant="like" onClick={() => advance(true)} disabled={submitting} />
           </div>
-          <p className="text-center text-xs text-muted-foreground mt-4">
-            ← 별로 &nbsp;·&nbsp; 좋음 →
-          </p>
+          <p className="text-center text-xs text-muted-foreground mt-4">← 별로 · 좋음 →</p>
         </>
       )}
     </main>
@@ -105,19 +124,8 @@ function VotePage() {
 }
 
 function SwipeCard({
-  url,
-  drag,
-  onDrag,
-  onLike,
-  onSkip,
-}: {
-  url: string;
-  drag: number;
-  onDrag: (v: number) => void;
-  onLike: () => void;
-  onSkip: () => void;
-}) {
-  // basic pointer drag
+  url, drag, onDrag, onLike, onSkip,
+}: { url: string; drag: number; onDrag: (v: number) => void; onLike: () => void; onSkip: () => void }) {
   const onPointerDown = (e: React.PointerEvent) => {
     const startX = e.clientX;
     const el = e.currentTarget as HTMLElement;
@@ -138,7 +146,6 @@ function SwipeCard({
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   };
-
   const rot = drag * 12;
   const tx = drag * 80;
   return (
@@ -150,39 +157,25 @@ function SwipeCard({
         transition: drag === 0 ? "transform 0.3s ease" : "none",
       }}
     >
-      <img
-        src={url}
-        alt="투표 사진"
-        loading="eager"
-        className="absolute inset-0 size-full object-cover pointer-events-none"
-        draggable={false}
-      />
-      {/* like overlay */}
-      <div
-        className="absolute top-6 right-6 px-3 py-1.5 rounded-lg border-2 border-primary text-primary font-extrabold tracking-wider rotate-12 transition-opacity"
-        style={{ opacity: Math.max(0, drag) }}
-      >
+      <img src={url} alt="투표 사진" className="absolute inset-0 size-full object-cover pointer-events-none" draggable={false} />
+      <div className="absolute top-6 right-6 px-3 py-1.5 rounded-lg border-2 border-primary text-primary font-extrabold tracking-wider rotate-12 transition-opacity" style={{ opacity: Math.max(0, drag) }}>
         LIKE
       </div>
-      <div
-        className="absolute top-6 left-6 px-3 py-1.5 rounded-lg border-2 border-destructive text-destructive font-extrabold tracking-wider -rotate-12 transition-opacity"
-        style={{ opacity: Math.max(0, -drag) }}
-      >
+      <div className="absolute top-6 left-6 px-3 py-1.5 rounded-lg border-2 border-destructive text-destructive font-extrabold tracking-wider -rotate-12 transition-opacity" style={{ opacity: Math.max(0, -drag) }}>
         SKIP
       </div>
     </div>
   );
 }
 
-function ActionButton({ variant, onClick }: { variant: "like" | "skip"; onClick: () => void }) {
+function ActionButton({ variant, onClick, disabled }: { variant: "like" | "skip"; onClick: () => void; disabled?: boolean }) {
   const isLike = variant === "like";
   return (
     <button
       onClick={onClick}
-      className={`size-16 rounded-full flex items-center justify-center transition-transform active:scale-90 ${
-        isLike
-          ? "bg-gradient-brand glow-primary text-background"
-          : "bg-muted text-muted-foreground border border-border"
+      disabled={disabled}
+      className={`size-16 rounded-full flex items-center justify-center transition-transform active:scale-90 disabled:opacity-50 ${
+        isLike ? "bg-gradient-brand glow-primary text-background" : "bg-muted text-muted-foreground border border-border"
       }`}
       aria-label={isLike ? "좋음" : "별로"}
     >
@@ -191,20 +184,23 @@ function ActionButton({ variant, onClick }: { variant: "like" | "skip"; onClick:
   );
 }
 
-function DoneCard({ total }: { total: number }) {
+function DoneCard({ voteId, submitting }: { voteId: string; submitting: boolean }) {
   return (
     <div className="surface-card p-8 text-center w-full max-w-[340px]">
-      <div className="text-5xl">🎉</div>
-      <h2 className="mt-3 text-xl font-bold">투표 완료!</h2>
+      <div className="text-5xl">{submitting ? "⏳" : "🎉"}</div>
+      <h2 className="mt-3 text-xl font-bold">{submitting ? "제출 중..." : "투표 완료!"}</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        총 {total}장의 사진에 선호도를 표시했습니다. 친구의 베스트컷 선정에 도움을 주셨어요.
+        {submitting ? "잠시만 기다려주세요." : "친구의 베스트컷 선정에 도움을 주셨어요."}
       </p>
-      <Link
-        to="/home"
-        className="mt-6 inline-block w-full rounded-[14px] bg-gradient-brand py-3.5 font-semibold text-background"
-      >
-        닫기
-      </Link>
+      {!submitting && (
+        <Link
+          to="/result/$id"
+          params={{ id: voteId }}
+          className="mt-6 inline-block w-full rounded-[14px] bg-gradient-brand py-3.5 font-semibold text-background"
+        >
+          결과 보기
+        </Link>
+      )}
     </div>
   );
 }
