@@ -1,6 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+// Server-side memo to avoid re-hitting Kakao for the same spot list on every request.
+const spotCache = new Map<string, { at: number; data: SpotEnrichment }>();
+const SPOT_TTL_MS = 60 * 60 * 1000; // 1h
+
+interface SpotEnrichment {
+  keywords: string[];
+  imageDataUrl: string | null;
+  placeName: string | null;
+}
+
 const KAKAO_BASE = "https://dapi.kakao.com";
 
 function getKey(): string | null {
