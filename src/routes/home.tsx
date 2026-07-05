@@ -17,10 +17,17 @@ function Home() {
   const { user, loading } = useSession();
   const fetchStats = useServerFn(getHomeStats);
   const fetchMyVotes = useServerFn(listMyVotes);
+  const fetchSpotEnrichments = useServerFn(getSpotEnrichments);
 
   const statsQuery = useQuery({
     queryKey: ["home-stats"],
     queryFn: () => fetchStats(),
+  });
+  const spotNames = photoSpots.map((s) => s.name);
+  const spotEnrichmentQuery = useQuery({
+    queryKey: ["spot-enrichments", ...spotNames],
+    queryFn: () => fetchSpotEnrichments({ data: { names: spotNames } }),
+    staleTime: 60 * 60 * 1000,
   });
   const myVotesQuery = useQuery({
     queryKey: ["my-votes", user?.id ?? "guest"],
