@@ -4,6 +4,7 @@ import { ChevronRight, Flame, ImagePlus, LogIn, Users, Vote } from "lucide-react
 import { useServerFn } from "@tanstack/react-start";
 import { photoSpots } from "@/lib/mock-data";
 import { getHomeStats, listMyVotes } from "@/lib/votes.functions";
+import { getSpotEnrichments } from "@/lib/kakao.functions";
 import { useSession } from "@/hooks/use-session";
 
 export const Route = createFileRoute("/home")({
@@ -16,10 +17,17 @@ function Home() {
   const { user, loading } = useSession();
   const fetchStats = useServerFn(getHomeStats);
   const fetchMyVotes = useServerFn(listMyVotes);
+  const fetchSpotEnrichments = useServerFn(getSpotEnrichments);
 
   const statsQuery = useQuery({
     queryKey: ["home-stats"],
     queryFn: () => fetchStats(),
+  });
+  const spotNames = photoSpots.map((s) => s.name);
+  const spotEnrichmentQuery = useQuery({
+    queryKey: ["spot-enrichments", ...spotNames],
+    queryFn: () => fetchSpotEnrichments({ data: { names: spotNames } }),
+    staleTime: 60 * 60 * 1000,
   });
   const myVotesQuery = useQuery({
     queryKey: ["my-votes", user?.id ?? "guest"],
@@ -67,30 +75,36 @@ function Home() {
           <h2 className="font-semibold">이번 주 인기 포토스팟</h2>
         </div>
         <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-5 px-5 snap-x snap-mandatory">
-          {photoSpots.map((spot) => (
-            <div key={spot.rank} className="snap-start shrink-0 w-[240px] surface-card overflow-hidden">
-              <div className="relative aspect-[4/3]">
-                <img src={spot.image} alt={spot.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
-                <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-background/70 backdrop-blur text-xs font-semibold">
-                  🏆 {spot.rank}위
+          {photoSpots.map((spot) => {
+            const enrichment = spotEnrichmentQuery.data?.find((e) => e.name === spot.name);
+            // Map API image takes precedence; NEVER show user-uploaded photos here.
+            const imageSrc = enrichment?.imageDataUrl ?? spot.image;
+            const keywords = enrichment?.keywords?.length ? enrichment.keywords : spot.tags;
+            return (
+              <div key={spot.rank} className="snap-start shrink-0 w-[240px] surface-card overflow-hidden">
+                <div className="relative aspect-[4/3]">
+                  <img src={imageSrc} alt={spot.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
+                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-background/70 backdrop-blur text-xs font-semibold">
+                    🏆 {spot.rank}위
+                  </div>
+                  <div className="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-t from-background to-transparent" />
                 </div>
-                <div className="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-t from-background to-transparent" />
+                <div className="p-3.5">
+                  <div className="flex items-center justify-between">
+                    <p className="font-semibold">{spot.name}</p>
+                    <p className="text-xs text-primary font-bold">추천율 {spot.recommend}%</p>
+                  </div>
+                  <div className="mt-2 flex gap-1.5 flex-wrap">
+                    {keywords.slice(0, 3).map((t) => (
+                      <span key={t} className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                        #{t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="p-3.5">
-                <div className="flex items-center justify-between">
-                  <p className="font-semibold">{spot.name}</p>
-                  <p className="text-xs text-primary font-bold">추천율 {spot.recommend}%</p>
-                </div>
-                <div className="mt-2 flex gap-1.5 flex-wrap">
-                  {spot.tags.map((t) => (
-                    <span key={t} className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                      #{t}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 

@@ -39,11 +39,6 @@ function Login() {
     navigate({ to: "/home" });
   };
 
-  const onUnsupported = (name: string) => {
-    toast.message(`${name} 로그인은 준비 중이에요`, {
-      description: "지금은 Google 로그인 또는 게스트로 진행해주세요.",
-    });
-  };
 
   return (
     <main className="relative min-h-screen overflow-hidden flex flex-col items-center justify-between px-6 py-16">
@@ -80,12 +75,6 @@ function Login() {
           {busy ? "이동 중..." : "Google로 계속하기"}
         </button>
 
-        <div className="flex items-center gap-5">
-          <SocialButton provider="kakao" onClick={() => onUnsupported("카카오")} />
-          <SocialButton provider="naver" onClick={() => onUnsupported("네이버")} />
-          <SocialButton provider="apple" onClick={() => onUnsupported("애플")} />
-        </div>
-
         <Link
           to="/home"
           className="text-xs text-muted-foreground underline-offset-4 hover:underline"
@@ -108,41 +97,3 @@ function GoogleG() {
   );
 }
 
-function SocialButton({
-  provider,
-  onClick,
-}: {
-  provider: "kakao" | "naver" | "apple";
-  onClick: () => void;
-}) {
-  const bg = {
-    kakao: "bg-[#FEE500]",
-    naver: "bg-[#03C75A]",
-    apple: "bg-white",
-  }[provider];
-  return (
-    <button
-      onClick={onClick}
-      aria-label={`${provider} 로그인`}
-      className={`size-14 rounded-full ${bg} flex items-center justify-center shadow-lg shadow-black/30 transition-transform active:scale-95 opacity-70 hover:opacity-100`}
-    >
-      {provider === "kakao" && (
-        <svg viewBox="0 0 24 24" className="size-7" aria-hidden="true">
-          <path fill="#191600" d="M12 3C6.48 3 2 6.58 2 10.99c0 2.86 1.88 5.36 4.71 6.78-.2.7-.72 2.6-.83 3.01-.13.51.19.5.4.36.16-.1 2.6-1.77 3.65-2.48.68.1 1.37.15 2.07.15 5.52 0 10-3.58 10-7.99S17.52 3 12 3z"/>
-        </svg>
-      )}
-      {provider === "naver" && (
-        <svg viewBox="0 0 24 24" className="size-6" aria-hidden="true">
-          <path fill="#fff" d="M16.27 12.84 7.65 0H0v24h7.73V11.16L16.35 24H24V0h-7.73z"/>
-        </svg>
-      )}
-      {provider === "apple" && (
-        <svg viewBox="0 0 24 24" fill="black" className="size-7" aria-hidden="true">
-          <g transform="translate(1.4 -0.4)">
-            <path d="M16.365 1.43c0 1.14-.4 2.21-1.1 3.04-.74.86-1.94 1.53-3.13 1.43-.13-1.11.46-2.27 1.1-3 .72-.85 1.96-1.45 3.13-1.47zM20.5 17.18c-.55 1.21-.81 1.75-1.52 2.83-.99 1.5-2.38 3.37-4.11 3.39-1.54.02-1.94-1-4.03-1-2.09 0-2.53.98-4.06 1-1.74.05-3.06-1.62-4.05-3.12C.7 16.85-.42 11.55 1.94 8.13c1.16-1.69 3.12-2.74 4.93-2.74 1.83 0 3 1 4.51 1 1.47 0 2.36-1 4.49-1 1.6 0 3.3.87 4.51 2.37-3.96 2.17-3.32 7.84.12 9.42z"/>
-          </g>
-        </svg>
-      )}
-    </button>
-  );
-}
