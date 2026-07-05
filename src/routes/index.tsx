@@ -39,11 +39,6 @@ function Login() {
     navigate({ to: "/home" });
   };
 
-  const onUnsupported = (name: string) => {
-    toast.message(`${name} 로그인은 준비 중이에요`, {
-      description: "지금은 Google 로그인 또는 게스트로 진행해주세요.",
-    });
-  };
 
   return (
     <main className="relative min-h-screen overflow-hidden flex flex-col items-center justify-between px-6 py-16">
