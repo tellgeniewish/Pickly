@@ -80,12 +80,6 @@ function Login() {
           {busy ? "이동 중..." : "Google로 계속하기"}
         </button>
 
-        <div className="flex items-center gap-5">
-          <SocialButton provider="kakao" onClick={() => onUnsupported("카카오")} />
-          <SocialButton provider="naver" onClick={() => onUnsupported("네이버")} />
-          <SocialButton provider="apple" onClick={() => onUnsupported("애플")} />
-        </div>
-
         <Link
           to="/home"
           className="text-xs text-muted-foreground underline-offset-4 hover:underline"
