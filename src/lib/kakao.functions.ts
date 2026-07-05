@@ -86,3 +86,63 @@ export const lookupPlace = createServerFn({ method: "POST" })
 
     return { keywords, imageDataUrl, placeName: doc.place_name as string };
   });
+
+// Batch enrichment for known photo-spot names (used by home page top-3).
+// Cached in-memory for 1h. Always safe: never returns user-generated photos.
+export const getSpotEnrichments = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z.object({ names: z.array(z.string().min(1).max(60)).min(1).max(10) }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const key = getKey();
+    if (!key) {
+      return data.names.map((name) => ({ name, keywords: [] as string[], imageDataUrl: null as string | null }));
+    }
+    const now = Date.now();
+    const results = await Promise.all(
+      data.names.map(async (name): Promise<{ name: string } & SpotEnrichment> => {
+        const cached = spotCache.get(name);
+        if (cached && now - cached.at < SPOT_TTL_MS) return { name, ...cached.data };
+        const j = await kakaoFetch(`/v2/local/search/keyword.json?query=${encodeURIComponent(name)}&size=1`);
+        const doc = j?.documents?.[0];
+        if (!doc) {
+          const empty: SpotEnrichment = { keywords: [], imageDataUrl: null, placeName: null };
+          spotCache.set(name, { at: now, data: empty });
+          return { name, ...empty };
+        }
+        const parts = String(doc.category_name || "")
+          .split(">")
+          .map((s: string) => s.trim())
+          .filter(Boolean);
+        const flat = Array.from(
+          new Set(parts.flatMap((p) => p.split(",").map((s) => s.trim()).filter(Boolean))),
+        );
+        const keywords = flat.slice(-3);
+        const lat = Number(doc.y);
+        const lng = Number(doc.x);
+        let imageDataUrl: string | null = null;
+        try {
+          const url = `${KAKAO_BASE}/v2/maps/staticmap?markers=type:d|size:mid|pos:${lng} ${lat}&level=3&MAPTYPE=ROADMAP&IW=480&IH=320`;
+          const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } });
+          if (res.ok) {
+            const buf = new Uint8Array(await res.arrayBuffer());
+            let bin = "";
+            for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+            const b64 = typeof btoa !== "undefined" ? btoa(bin) : Buffer.from(buf).toString("base64");
+            imageDataUrl = `data:image/png;base64,${b64}`;
+          }
+        } catch {
+          imageDataUrl = null;
+        }
+        const enrichment: SpotEnrichment = {
+          keywords,
+          imageDataUrl,
+          placeName: doc.place_name as string,
+        };
+        spotCache.set(name, { at: now, data: enrichment });
+        return { name, ...enrichment };
+      }),
+    );
+    return results;
+  });
+
