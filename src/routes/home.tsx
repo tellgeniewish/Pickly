@@ -4,6 +4,7 @@ import { ChevronRight, Flame, ImagePlus, LogIn, Users, Vote } from "lucide-react
 import { useServerFn } from "@tanstack/react-start";
 import { photoSpots } from "@/lib/mock-data";
 import { getHomeStats, listMyVotes } from "@/lib/votes.functions";
+import { getSpotEnrichments } from "@/lib/kakao.functions";
 import { useSession } from "@/hooks/use-session";
 
 export const Route = createFileRoute("/home")({
