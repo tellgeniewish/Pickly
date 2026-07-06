@@ -181,16 +181,6 @@ function Create() {
         />
       </div>
 
-      <div>
-        <label className="text-sm text-muted-foreground">위치 (선택)</label>
-        <input
-          value={locationName}
-          onChange={(e) => setLocationName(e.target.value)}
-          placeholder="예) 성수동 서울숲"
-          className="mt-2 w-full bg-muted border border-border rounded-[14px] px-4 py-3.5 text-base placeholder:text-muted-foreground/60 outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition"
-        />
-      </div>
-
       <section>
         <div className="flex items-center justify-between">
           <label className="text-sm text-muted-foreground">사진 업로드 (2~10장)</label>
@@ -240,41 +230,73 @@ function Create() {
         </div>
       </section>
 
-      {photos.length >= 2 && photos.length <= 10 && (
-        <section>
-          <div className="flex items-center gap-1.5">
-            <MapPin className="size-4 text-primary" />
-            <label className="text-sm text-muted-foreground">위치 정보 활용</label>
-          </div>
-          <div className="mt-2 rounded-2xl bg-muted/40 border border-border p-4 space-y-2.5">
-            {locationGroups.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                사진에서 위치 정보를 찾지 못했어요. (EXIF GPS 태그가 없거나 카메라 앱에서 위치 기록이 꺼져 있어요.)
+      <section>
+        <div className="rounded-2xl bg-muted/40 border border-border p-4">
+          <div className="flex items-start gap-2.5">
+            <CheckCircle2 className="size-5 text-primary shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="font-semibold text-sm">위치 정보 활용</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                EXIF 기반으로 50m 단위 자동 그룹화 됩니다. 포토스팟 통계에 활용돼요.
               </p>
-            ) : (
-              locationGroups.map((g, idx) => (
-                <div key={idx} className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">
-                      {g.name ??
-                        `위도 ${g.centerLat.toFixed(4)}, 경도 ${g.centerLng.toFixed(4)}`}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {g.photoIndices.map((n) => `${n}번`).join(", ")} 사진
-                    </p>
-                  </div>
-                  <span className="text-xs text-primary font-semibold shrink-0">
-                    {g.photoIndices.length}장
-                  </span>
-                </div>
-              ))
-            )}
+            </div>
           </div>
-          <p className="mt-1.5 text-[11px] text-muted-foreground/70">
-            같은 위치(50m 이내)로 판단된 사진끼리 묶었어요.
-          </p>
-        </section>
-      )}
+
+          {photos.length === 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground/80">
+              사진을 추가하면 위치가 자동으로 여기 표시돼요.
+            </p>
+          ) : locationGroups.length === 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground/80">
+              추가한 사진에서 EXIF 위치 정보를 찾지 못했어요. (카메라 앱 위치 기록이 꺼져 있거나, 스크린샷/편집본일 수 있어요.)
+            </p>
+          ) : (
+            <div className="mt-3 border-t border-border/60 pt-3 space-y-2.5">
+              {locationGroups.map((g, idx) => {
+                const loading = g.name === null;
+                return (
+                  <div key={idx} className="flex items-center justify-between gap-3">
+                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                      <MapPin className="size-4 text-primary shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {g.name ??
+                            `위도 ${g.centerLat.toFixed(4)}, 경도 ${g.centerLng.toFixed(4)}`}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {g.photoIndices.map((n) => `${n}번`).join(", ")}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setLocationGroups((prev) =>
+                          prev.map((x, i) => (i === idx ? { ...x, name: null } : x)),
+                        );
+                        void reverse({ data: { lat: g.centerLat, lng: g.centerLng } })
+                          .then((r) => {
+                            setLocationGroups((prev) =>
+                              prev.map((x, i) =>
+                                i === idx ? { ...x, name: r?.name ?? null } : x,
+                              ),
+                            );
+                          })
+                          .catch(() => {
+                            /* ignore */
+                          });
+                      }}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors shrink-0"
+                    >
+                      <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+                      재설정
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </section>
 
       <section>
         <label className="text-sm text-muted-foreground">마감</label>
