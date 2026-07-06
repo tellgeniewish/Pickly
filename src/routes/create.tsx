@@ -148,10 +148,11 @@ function Create() {
         if (error) throw error;
         paths.push(path);
       }
+      const derivedLocation = locationGroups.find((g) => g.name)?.name ?? null;
       const res = await create({
         data: {
           title: title.trim(),
-          locationName: locationName.trim() || null,
+          locationName: derivedLocation,
           deadlineHours: deadline,
           photoPaths: paths,
         },
