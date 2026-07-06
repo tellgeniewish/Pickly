@@ -33,7 +33,6 @@ function Create() {
   const create = useServerFn(createVote);
   const reverse = useServerFn(reverseGeocode);
   const [title, setTitle] = useState("");
-  const [locationName, setLocationName] = useState("");
   const [deadline, setDeadline] = useState<24 | 72 | 168>(72);
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [submitting, setSubmitting] = useState(false);
