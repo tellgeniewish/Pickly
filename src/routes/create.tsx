@@ -25,6 +25,7 @@ interface LocalPhoto {
 
 interface LocationGroup extends GeoCluster {
   name: string | null;
+  resolving: boolean;
 }
 
 function Create() {
@@ -38,6 +39,7 @@ function Create() {
   const [submitting, setSubmitting] = useState(false);
   const [locationGroups, setLocationGroups] = useState<LocationGroup[]>([]);
   const [useLocationForRanking, setUseLocationForRanking] = useState(true);
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -54,28 +56,58 @@ function Create() {
       .filter((x): x is { index: number; lat: number; lng: number } => x !== null);
     if (geo.length === 0) {
       setLocationGroups([]);
+      setEditingIdx(null);
       return;
     }
     const clusters = clusterByDistance(geo, 50);
-    setLocationGroups(clusters.map((c) => ({ ...c, name: null })));
+    setLocationGroups(clusters.map((c) => ({ ...c, name: null, resolving: true })));
+    setEditingIdx(null);
     let cancelled = false;
     (async () => {
-      const named = await Promise.all(
-        clusters.map(async (c) => {
+      const results = await Promise.all(
+        clusters.map(async (c, i) => {
           try {
             const r = await reverse({ data: { lat: c.centerLat, lng: c.centerLng } });
-            return { ...c, name: r?.name ?? null };
+            return { i, name: r?.name ?? null };
           } catch {
-            return { ...c, name: null };
+            return { i, name: null as string | null };
           }
         }),
       );
-      if (!cancelled) setLocationGroups(named);
+      if (cancelled) return;
+      setLocationGroups((prev) => {
+        const next = [...prev];
+        for (const { i, name } of results) {
+          if (next[i]) next[i] = { ...next[i], name, resolving: false };
+        }
+        return next;
+      });
     })();
     return () => {
       cancelled = true;
     };
   }, [photos, reverse]);
+
+  const geoIndices = photos
+    .map((p, i) => (p.lat != null && p.lng != null ? i + 1 : null))
+    .filter((n): n is number => n !== null);
+
+  const toggleAssign = (targetIdx: number, num: number) => {
+    setLocationGroups((prev) => {
+      const inTarget = prev[targetIdx]?.photoIndices.includes(num);
+      const next = prev.map((g, i) => {
+        if (i === targetIdx) {
+          const photoIndices = inTarget
+            ? g.photoIndices.filter((n) => n !== num)
+            : [...g.photoIndices, num].sort((a, b) => a - b);
+          return { ...g, photoIndices };
+        }
+        if (!inTarget) return { ...g, photoIndices: g.photoIndices.filter((n) => n !== num) };
+        return g;
+      });
+      return next.filter((g, i) => g.photoIndices.length > 0 || i === targetIdx);
+    });
+  };
 
   if (!loading && !user) {
     return (
