@@ -25,6 +25,7 @@ interface LocalPhoto {
 
 interface LocationGroup extends GeoCluster {
   name: string | null;
+  resolving: boolean;
 }
 
 function Create() {
@@ -38,6 +39,7 @@ function Create() {
   const [submitting, setSubmitting] = useState(false);
   const [locationGroups, setLocationGroups] = useState<LocationGroup[]>([]);
   const [useLocationForRanking, setUseLocationForRanking] = useState(true);
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -54,28 +56,58 @@ function Create() {
       .filter((x): x is { index: number; lat: number; lng: number } => x !== null);
     if (geo.length === 0) {
       setLocationGroups([]);
+      setEditingIdx(null);
       return;
     }
     const clusters = clusterByDistance(geo, 50);
-    setLocationGroups(clusters.map((c) => ({ ...c, name: null })));
+    setLocationGroups(clusters.map((c) => ({ ...c, name: null, resolving: true })));
+    setEditingIdx(null);
     let cancelled = false;
     (async () => {
-      const named = await Promise.all(
-        clusters.map(async (c) => {
+      const results = await Promise.all(
+        clusters.map(async (c, i) => {
           try {
             const r = await reverse({ data: { lat: c.centerLat, lng: c.centerLng } });
-            return { ...c, name: r?.name ?? null };
+            return { i, name: r?.name ?? null };
           } catch {
-            return { ...c, name: null };
+            return { i, name: null as string | null };
           }
         }),
       );
-      if (!cancelled) setLocationGroups(named);
+      if (cancelled) return;
+      setLocationGroups((prev) => {
+        const next = [...prev];
+        for (const { i, name } of results) {
+          if (next[i]) next[i] = { ...next[i], name, resolving: false };
+        }
+        return next;
+      });
     })();
     return () => {
       cancelled = true;
     };
   }, [photos, reverse]);
+
+  const geoIndices = photos
+    .map((p, i) => (p.lat != null && p.lng != null ? i + 1 : null))
+    .filter((n): n is number => n !== null);
+
+  const toggleAssign = (targetIdx: number, num: number) => {
+    setLocationGroups((prev) => {
+      const inTarget = prev[targetIdx]?.photoIndices.includes(num);
+      const next = prev.map((g, i) => {
+        if (i === targetIdx) {
+          const photoIndices = inTarget
+            ? g.photoIndices.filter((n) => n !== num)
+            : [...g.photoIndices, num].sort((a, b) => a - b);
+          return { ...g, photoIndices };
+        }
+        if (!inTarget) return { ...g, photoIndices: g.photoIndices.filter((n) => n !== num) };
+        return g;
+      });
+      return next.filter((g, i) => g.photoIndices.length > 0 || i === targetIdx);
+    });
+  };
 
   if (!loading && !user) {
     return (
@@ -280,46 +312,68 @@ function Create() {
                   추가한 사진에서 EXIF 위치 정보를 찾지 못했어요. (카메라 앱 위치 기록이 꺼져 있거나, 스크린샷/편집본일 수 있어요.)
                 </p>
               ) : (
-                <div className="mt-3 border-t border-border/60 pt-3 space-y-2.5">
+                <div className="mt-3 border-t border-border/60 pt-3 space-y-3">
                   {locationGroups.map((g, idx) => {
-                    const loading = g.name === null;
+                    const isEditing = editingIdx === idx;
                     return (
-                      <div key={idx} className="flex items-center justify-between gap-3">
-                        <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                          <MapPin className="size-4 text-primary shrink-0 mt-0.5" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">
-                              {g.name ??
-                                `위도 ${g.centerLat.toFixed(4)}, 경도 ${g.centerLng.toFixed(4)}`}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {g.photoIndices.map((n) => `${n}번`).join(", ")}
-                            </p>
+                      <div key={idx} className="space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                            <MapPin className="size-4 text-primary shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {g.resolving
+                                  ? "위치 확인 중..."
+                                  : (g.name ??
+                                    `위도 ${g.centerLat.toFixed(4)}, 경도 ${g.centerLng.toFixed(4)}`)}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {g.photoIndices.length === 0
+                                  ? "지정된 사진 없음"
+                                  : g.photoIndices.map((n) => `${n}번`).join(", ")}
+                              </p>
+                            </div>
                           </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingIdx(isEditing ? null : idx);
+                            }}
+                            className={`flex items-center gap-1 text-xs transition-colors shrink-0 ${
+                              isEditing ? "text-primary" : "text-muted-foreground hover:text-primary"
+                            }`}
+                          >
+                            <RefreshCw className="size-3.5" />
+                            {isEditing ? "완료" : "재설정"}
+                          </button>
                         </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setLocationGroups((prev) =>
-                              prev.map((x, i) => (i === idx ? { ...x, name: null } : x)),
-                            );
-                            void reverse({ data: { lat: g.centerLat, lng: g.centerLng } })
-                              .then((r) => {
-                                setLocationGroups((prev) =>
-                                  prev.map((x, i) =>
-                                    i === idx ? { ...x, name: r?.name ?? null } : x,
-                                  ),
+                        {isEditing && (
+                          <div className="ml-6 rounded-xl bg-background/40 border border-border/60 p-2.5">
+                            <p className="text-[11px] text-muted-foreground mb-2">
+                              이 위치에 속하는 사진 번호를 눌러서 골라주세요.
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {geoIndices.map((n) => {
+                                const on = g.photoIndices.includes(n);
+                                return (
+                                  <button
+                                    key={n}
+                                    type="button"
+                                    onClick={() => toggleAssign(idx, n)}
+                                    className={`size-8 rounded-full text-xs font-bold border transition-colors ${
+                                      on
+                                        ? "bg-primary text-background border-primary"
+                                        : "border-border text-muted-foreground hover:border-primary hover:text-primary"
+                                    }`}
+                                  >
+                                    {n}
+                                  </button>
                                 );
-                              })
-                              .catch(() => {
-                                /* ignore */
-                              });
-                          }}
-                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors shrink-0"
-                        >
-                          <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
-                          재설정
-                        </button>
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
