@@ -33,10 +33,11 @@ function Create() {
   const create = useServerFn(createVote);
   const reverse = useServerFn(reverseGeocode);
   const [title, setTitle] = useState("");
-  const [deadline, setDeadline] = useState<24 | 72 | 168>(72);
+  const [deadlineDays, setDeadlineDays] = useState<number>(3);
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [locationGroups, setLocationGroups] = useState<LocationGroup[]>([]);
+  const [useLocationForRanking, setUseLocationForRanking] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -56,9 +57,7 @@ function Create() {
       return;
     }
     const clusters = clusterByDistance(geo, 50);
-    // Initial state with null names
     setLocationGroups(clusters.map((c) => ({ ...c, name: null })));
-    // Reverse-geocode each cluster centroid
     let cancelled = false;
     (async () => {
       const named = await Promise.all(
@@ -108,7 +107,6 @@ function Create() {
         file: f,
         preview: URL.createObjectURL(f),
       };
-      // Extract EXIF GPS (best-effort, non-blocking failures)
       try {
         const gps = await exifr.gps(f);
         if (gps && typeof gps.latitude === "number" && typeof gps.longitude === "number") {
@@ -148,12 +146,15 @@ function Create() {
         if (error) throw error;
         paths.push(path);
       }
-      const derivedLocation = locationGroups.find((g) => g.name)?.name ?? null;
+      // Only include location for ranking when user opts in.
+      const derivedLocation = useLocationForRanking
+        ? (locationGroups.find((g) => g.name)?.name ?? null)
+        : null;
       const res = await create({
         data: {
           title: title.trim(),
           locationName: derivedLocation,
-          deadlineHours: deadline,
+          deadlineHours: deadlineDays * 24,
           photoPaths: paths,
         },
       });
@@ -231,89 +232,131 @@ function Create() {
       </section>
 
       <section>
-        <div className="rounded-2xl bg-muted/40 border border-border p-4">
-          <div className="flex items-start gap-2.5">
-            <CheckCircle2 className="size-5 text-primary shrink-0 mt-0.5" />
-            <div className="min-w-0">
-              <p className="font-semibold text-sm">위치 정보 활용</p>
+        <div
+          className={`rounded-2xl border p-4 transition-colors ${
+            useLocationForRanking ? "bg-muted/40 border-border" : "bg-muted/20 border-border/60"
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => setUseLocationForRanking((v) => !v)}
+            className="w-full flex items-start gap-2.5 text-left"
+            aria-pressed={useLocationForRanking}
+          >
+            <CheckCircle2
+              className={`size-5 shrink-0 mt-0.5 transition-colors ${
+                useLocationForRanking ? "text-primary" : "text-muted-foreground/50"
+              }`}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-semibold text-sm">위치 정보 활용</p>
+                <span
+                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                    useLocationForRanking
+                      ? "bg-primary/15 text-primary"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {useLocationForRanking ? "ON" : "OFF"}
+                </span>
+              </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                EXIF 기반으로 50m 단위 자동 그룹화 됩니다. 포토스팟 통계에 활용돼요.
+                {useLocationForRanking
+                  ? "EXIF 기반으로 50m 단위 자동 그룹화 됩니다. 홈화면의 이번 주 인기 포토스팟 통계에 반영돼요."
+                  : "OFF 상태에서는 홈화면의 이번 주 인기 포토스팟 통계에 반영되지 않아요."}
               </p>
             </div>
-          </div>
+          </button>
 
-          {photos.length === 0 ? (
-            <p className="mt-3 text-xs text-muted-foreground/80">
-              사진을 추가하면 위치가 자동으로 여기 표시돼요.
-            </p>
-          ) : locationGroups.length === 0 ? (
-            <p className="mt-3 text-xs text-muted-foreground/80">
-              추가한 사진에서 EXIF 위치 정보를 찾지 못했어요. (카메라 앱 위치 기록이 꺼져 있거나, 스크린샷/편집본일 수 있어요.)
-            </p>
-          ) : (
-            <div className="mt-3 border-t border-border/60 pt-3 space-y-2.5">
-              {locationGroups.map((g, idx) => {
-                const loading = g.name === null;
-                return (
-                  <div key={idx} className="flex items-center justify-between gap-3">
-                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                      <MapPin className="size-4 text-primary shrink-0 mt-0.5" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {g.name ??
-                            `위도 ${g.centerLat.toFixed(4)}, 경도 ${g.centerLng.toFixed(4)}`}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {g.photoIndices.map((n) => `${n}번`).join(", ")}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setLocationGroups((prev) =>
-                          prev.map((x, i) => (i === idx ? { ...x, name: null } : x)),
-                        );
-                        void reverse({ data: { lat: g.centerLat, lng: g.centerLng } })
-                          .then((r) => {
+          {useLocationForRanking && (
+            <>
+              {photos.length === 0 ? (
+                <p className="mt-3 text-xs text-muted-foreground/80">
+                  사진을 추가하면 위치가 자동으로 여기 표시돼요.
+                </p>
+              ) : locationGroups.length === 0 ? (
+                <p className="mt-3 text-xs text-muted-foreground/80">
+                  추가한 사진에서 EXIF 위치 정보를 찾지 못했어요. (카메라 앱 위치 기록이 꺼져 있거나, 스크린샷/편집본일 수 있어요.)
+                </p>
+              ) : (
+                <div className="mt-3 border-t border-border/60 pt-3 space-y-2.5">
+                  {locationGroups.map((g, idx) => {
+                    const loading = g.name === null;
+                    return (
+                      <div key={idx} className="flex items-center justify-between gap-3">
+                        <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                          <MapPin className="size-4 text-primary shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {g.name ??
+                                `위도 ${g.centerLat.toFixed(4)}, 경도 ${g.centerLng.toFixed(4)}`}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {g.photoIndices.map((n) => `${n}번`).join(", ")}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setLocationGroups((prev) =>
-                              prev.map((x, i) =>
-                                i === idx ? { ...x, name: r?.name ?? null } : x,
-                              ),
+                              prev.map((x, i) => (i === idx ? { ...x, name: null } : x)),
                             );
-                          })
-                          .catch(() => {
-                            /* ignore */
-                          });
-                      }}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors shrink-0"
-                    >
-                      <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
-                      재설정
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                            void reverse({ data: { lat: g.centerLat, lng: g.centerLng } })
+                              .then((r) => {
+                                setLocationGroups((prev) =>
+                                  prev.map((x, i) =>
+                                    i === idx ? { ...x, name: r?.name ?? null } : x,
+                                  ),
+                                );
+                              })
+                              .catch(() => {
+                                /* ignore */
+                              });
+                          }}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors shrink-0"
+                        >
+                          <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+                          재설정
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
       </section>
 
       <section>
-        <label className="text-sm text-muted-foreground">마감</label>
-        <div className="mt-2 grid grid-cols-3 gap-2">
-          {([
-            [24, "24시간"],
-            [72, "3일"],
-            [168, "7일"],
-          ] as const).map(([v, l]) => (
+        <div className="flex items-center justify-between">
+          <label className="text-sm text-muted-foreground">마감 (1~7일)</label>
+          <span className="text-sm font-semibold text-primary">
+            {deadlineDays}일 후 마감
+          </span>
+        </div>
+        <input
+          type="range"
+          min={1}
+          max={7}
+          step={1}
+          value={deadlineDays}
+          onChange={(e) => setDeadlineDays(Number(e.target.value))}
+          className="mt-3 w-full accent-primary"
+        />
+        <div className="mt-1 flex justify-between text-[10px] text-muted-foreground px-0.5">
+          {[1, 2, 3, 4, 5, 6, 7].map((d) => (
             <button
-              key={v}
-              onClick={() => setDeadline(v)}
-              className={`rounded-[14px] py-3 text-sm font-medium border transition-all ${
-                deadline === v ? "border-primary bg-primary/10 text-primary" : "border-border bg-muted/40 text-muted-foreground"
+              key={d}
+              type="button"
+              onClick={() => setDeadlineDays(d)}
+              className={`w-5 text-center ${
+                deadlineDays === d ? "text-primary font-bold" : ""
               }`}
             >
-              {l}
+              {d}
             </button>
           ))}
         </div>
