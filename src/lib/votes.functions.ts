@@ -137,11 +137,10 @@ export const submitVote = createServerFn({ method: "POST" })
     // Upsert (not insert) so re-submitting the same session is idempotent.
     const { error: cErr } = await supabaseAdmin
       .from("vote_choices")
-      .upsert(rows, { onConflict: "session_id,photo_id" });
-    if (cErr) throw new Error(cErr.message);
+      .upsert(rows, { onConflict: "session_id,photo_id", ignoreDuplicates: false });
+    // A concurrent duplicate submit is a no-op, not a failure: the rows are identical.
+    if (cErr && (cErr as { code?: string }).code !== "23505") throw new Error(cErr.message);
     return { ok: true, sessionId };
-
-    return { ok: true };
   });
 
 // ---------- getVoteResults (public) ----------
