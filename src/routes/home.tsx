@@ -88,24 +88,25 @@ function Home() {
               : "아직 집계된 포토스팟이 없어요. 위치 정보를 켜고 투표를 만들어보세요!"}
           </p>
         ) : (
-        <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-5 px-5 snap-x snap-mandatory">
+        <div className="space-y-3">
           {spots.map((spot, i) => {
             const enrichment = spotEnrichmentQuery.data?.find((e) => e.name === spot.name);
             // Map API image only; NEVER show user-uploaded photos here.
             const imageSrc = enrichment?.imageDataUrl ?? null;
             const keywords = enrichment?.keywords ?? [];
             return (
-              <div key={spot.name} className="snap-start shrink-0 w-[240px] surface-card overflow-hidden">
-                <div className="relative aspect-[4/3] bg-muted">
-                  {imageSrc && (
+              <div key={spot.name} className="surface-card overflow-hidden flex">
+                <div className="relative w-28 shrink-0 bg-muted">
+                  {imageSrc ? (
                     <img src={imageSrc} alt={`${spot.name} 지도`} loading="lazy" className="absolute inset-0 size-full object-cover" />
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-brand-soft flex items-center justify-center text-2xl">🗺️</div>
                   )}
-                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-background/70 backdrop-blur text-xs font-semibold">
+                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-background/70 backdrop-blur text-[11px] font-semibold">
                     🏆 {i + 1}위
                   </div>
-                  <div className="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-t from-background to-transparent" />
                 </div>
-                <div className="p-3.5">
+                <div className="p-3.5 flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-semibold truncate">{spot.name}</p>
                     <p className="text-xs text-primary font-bold shrink-0">❤️ {spot.likes}</p>
