@@ -233,7 +233,7 @@ export const runAiAnalysis = createServerFn({ method: "POST" })
         return {
           summary: cached.summary,
           space_keywords: (cached.space_keywords ?? []) as string[],
-          top_analysis: (cached.top_analysis ?? []) as unknown[],
+          top_analysis: (cached.top_analysis ?? []) as Record<string, string | number>[],
         };
       }
     }
