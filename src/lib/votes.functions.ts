@@ -213,11 +213,30 @@ export const getVoteResults = createServerFn({ method: "GET" })
   });
 
 // ---------- runAiAnalysis ----------
+// Idempotent: the analysis is stored in ai_analyses and reused forever unless
+// `force` is passed, so viewers never spend extra AI calls re-analysing.
 export const runAiAnalysis = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid(), force: z.boolean().optional() }).parse(input),
+  )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { analyzeVote } = await import("./ai-analysis.server");
+
+    if (!data.force) {
+      const { data: cached } = await supabaseAdmin
+        .from("ai_analyses")
+        .select("summary, space_keywords, top_analysis")
+        .eq("vote_id", data.id)
+        .maybeSingle();
+      if (cached?.summary) {
+        return {
+          summary: cached.summary,
+          space_keywords: (cached.space_keywords ?? []) as string[],
+          top_analysis: (cached.top_analysis ?? []) as unknown[],
+        };
+      }
+    }
 
     const { data: vote } = await supabaseAdmin
       .from("votes")
