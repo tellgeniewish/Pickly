@@ -94,14 +94,20 @@ export const submitVote = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // upsert session
-    const { data: existing } = await supabaseAdmin
-      .from("vote_sessions")
-      .select("id")
-      .eq("vote_id", data.voteId)
-      .eq("anon_key", data.anonKey)
-      .maybeSingle();
-    let sessionId = existing?.id;
+    // Find-or-create the session. Concurrent submits (double-tap / swipe + click on the
+    // last card) can race here, so a unique-violation is treated as "someone else won" and
+    // we simply re-read the existing row instead of failing the request.
+    const findSession = async () => {
+      const { data: row } = await supabaseAdmin
+        .from("vote_sessions")
+        .select("id")
+        .eq("vote_id", data.voteId)
+        .eq("anon_key", data.anonKey)
+        .maybeSingle();
+      return row?.id ?? null;
+    };
+
+    let sessionId = await findSession();
     if (!sessionId) {
       const { data: created, error } = await supabaseAdmin
         .from("vote_sessions")
@@ -112,19 +118,29 @@ export const submitVote = createServerFn({ method: "POST" })
         })
         .select("id")
         .single();
-      if (error || !created) throw new Error(error?.message ?? "세션 생성 실패");
-      sessionId = created.id;
-    } else {
-      // wipe previous choices to allow re-vote
-      await supabaseAdmin.from("vote_choices").delete().eq("session_id", sessionId);
+      if (created) sessionId = created.id;
+      else {
+        sessionId = await findSession();
+        if (!sessionId) throw new Error(error?.message ?? "세션 생성 실패");
+      }
     }
-    const rows = data.choices.map((c) => ({
+
+    // Dedupe by photo_id (last choice wins) so a duplicated swipe can never violate
+    // vote_choices_session_id_photo_id_key.
+    const byPhoto = new Map<string, boolean>();
+    for (const c of data.choices) byPhoto.set(c.photoId, c.liked);
+    const rows = Array.from(byPhoto, ([photo_id, liked]) => ({
       session_id: sessionId!,
-      photo_id: c.photoId,
-      liked: c.liked,
+      photo_id,
+      liked,
     }));
-    const { error: cErr } = await supabaseAdmin.from("vote_choices").insert(rows);
+    // Upsert (not insert) so re-submitting the same session is idempotent.
+    const { error: cErr } = await supabaseAdmin
+      .from("vote_choices")
+      .upsert(rows, { onConflict: "session_id,photo_id" });
     if (cErr) throw new Error(cErr.message);
+    return { ok: true, sessionId };
+
     return { ok: true };
   });
 
