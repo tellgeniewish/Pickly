@@ -94,14 +94,20 @@ export const submitVote = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // upsert session
-    const { data: existing } = await supabaseAdmin
-      .from("vote_sessions")
-      .select("id")
-      .eq("vote_id", data.voteId)
-      .eq("anon_key", data.anonKey)
-      .maybeSingle();
-    let sessionId = existing?.id;
+    // Find-or-create the session. Concurrent submits (double-tap / swipe + click on the
+    // last card) can race here, so a unique-violation is treated as "someone else won" and
+    // we simply re-read the existing row instead of failing the request.
+    const findSession = async () => {
+      const { data: row } = await supabaseAdmin
+        .from("vote_sessions")
+        .select("id")
+        .eq("vote_id", data.voteId)
+        .eq("anon_key", data.anonKey)
+        .maybeSingle();
+      return row?.id ?? null;
+    };
+
+    let sessionId = await findSession();
     if (!sessionId) {
       const { data: created, error } = await supabaseAdmin
         .from("vote_sessions")
@@ -112,19 +118,29 @@ export const submitVote = createServerFn({ method: "POST" })
         })
         .select("id")
         .single();
-      if (error || !created) throw new Error(error?.message ?? "세션 생성 실패");
-      sessionId = created.id;
-    } else {
-      // wipe previous choices to allow re-vote
-      await supabaseAdmin.from("vote_choices").delete().eq("session_id", sessionId);
+      if (created) sessionId = created.id;
+      else {
+        sessionId = await findSession();
+        if (!sessionId) throw new Error(error?.message ?? "세션 생성 실패");
+      }
     }
-    const rows = data.choices.map((c) => ({
+
+    // Dedupe by photo_id (last choice wins) so a duplicated swipe can never violate
+    // vote_choices_session_id_photo_id_key.
+    const byPhoto = new Map<string, boolean>();
+    for (const c of data.choices) byPhoto.set(c.photoId, c.liked);
+    const rows = Array.from(byPhoto, ([photo_id, liked]) => ({
       session_id: sessionId!,
-      photo_id: c.photoId,
-      liked: c.liked,
+      photo_id,
+      liked,
     }));
-    const { error: cErr } = await supabaseAdmin.from("vote_choices").insert(rows);
+    // Upsert (not insert) so re-submitting the same session is idempotent.
+    const { error: cErr } = await supabaseAdmin
+      .from("vote_choices")
+      .upsert(rows, { onConflict: "session_id,photo_id" });
     if (cErr) throw new Error(cErr.message);
+    return { ok: true, sessionId };
+
     return { ok: true };
   });
 
@@ -326,4 +342,54 @@ export const getHomeStats = createServerFn({ method: "GET" }).handler(async () =
     totalParticipants: sessionsCount ?? 0,
     votesToday: todayVotes ?? 0,
   };
+});
+
+// ---------- getTopSpots (public) ----------
+// Ranks real user vote locations by total likes received. Top 3 only.
+// Only votes that opted into location usage have a location_name, so opting out
+// keeps a vote out of this ranking entirely.
+export const getTopSpots = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  const { data: votes } = await supabaseAdmin
+    .from("votes")
+    .select("id, location_name")
+    .not("location_name", "is", null);
+  if (!votes || votes.length === 0) return [] as { name: string; likes: number; recommend: number }[];
+
+  const voteIds = votes.map((v) => v.id);
+  const { data: photos } = await supabaseAdmin
+    .from("vote_photos")
+    .select("id, vote_id")
+    .in("vote_id", voteIds);
+  const photoIds = (photos ?? []).map((p) => p.id);
+  if (photoIds.length === 0) return [];
+
+  const { data: choices } = await supabaseAdmin
+    .from("vote_choices")
+    .select("photo_id, liked")
+    .in("photo_id", photoIds);
+
+  const voteByPhoto = new Map((photos ?? []).map((p) => [p.id, p.vote_id]));
+  const locByVote = new Map(votes.map((v) => [v.id, (v.location_name ?? "").trim()]));
+
+  const agg = new Map<string, { likes: number; total: number }>();
+  for (const c of choices ?? []) {
+    const voteId = voteByPhoto.get(c.photo_id);
+    const loc = voteId ? locByVote.get(voteId) : null;
+    if (!loc) continue;
+    const a = agg.get(loc) ?? { likes: 0, total: 0 };
+    a.total += 1;
+    if (c.liked) a.likes += 1;
+    agg.set(loc, a);
+  }
+
+  return Array.from(agg, ([name, a]) => ({
+    name,
+    likes: a.likes,
+    recommend: a.total > 0 ? Math.round((a.likes / a.total) * 100) : 0,
+  }))
+    .filter((s) => s.likes > 0)
+    .sort((a, b) => b.likes - a.likes || b.recommend - a.recommend)
+    .slice(0, 3);
 });

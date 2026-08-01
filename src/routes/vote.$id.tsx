@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Heart, X } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { getVote, submitVote } from "@/lib/votes.functions";
 import { getAnonKey, getAnonName } from "@/lib/anon";
+
 
 export const Route = createFileRoute("/vote/$id")({
   head: () => ({ meta: [{ title: "Pickly — 투표하기" }] }),
@@ -25,6 +26,10 @@ function VotePage() {
   const [done, setDone] = useState(false);
   const [drag, setDrag] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  // Guards against a single card being recorded twice (swipe release + button/click
+  // firing back-to-back before React commits the next index) and against double submits.
+  const lastHandledPhoto = useRef<string | null>(null);
+  const submittedRef = useRef(false);
 
   if (q.isLoading)
     return <main className="mx-auto max-w-md px-5 pt-10 text-center text-muted-foreground">불러오는 중...</main>;
@@ -36,11 +41,16 @@ function VotePage() {
   const current = photos[idx];
 
   const advance = async (liked: boolean) => {
-    if (!current) return;
-    const next = [...history, { photoId: current.id, liked }];
+    if (!current || submitting) return;
+    if (lastHandledPhoto.current === current.id) return;
+    lastHandledPhoto.current = current.id;
+
+    const next = [...history.filter((h) => h.photoId !== current.id), { photoId: current.id, liked }];
     setHistory(next);
     setDrag(0);
     if (idx + 1 >= total) {
+      if (submittedRef.current) return;
+      submittedRef.current = true;
       setSubmitting(true);
       try {
         const anonKey = getAnonKey();
@@ -51,6 +61,8 @@ function VotePage() {
         setDone(true);
       } catch (e) {
         console.error(e);
+        submittedRef.current = false;
+        lastHandledPhoto.current = null;
         toast.error(e instanceof Error ? e.message : "제출 실패");
       } finally {
         setSubmitting(false);
@@ -61,11 +73,13 @@ function VotePage() {
   };
 
   const undo = () => {
-    if (history.length === 0) return;
+    if (history.length === 0 || submitting) return;
     setHistory(history.slice(0, -1));
     setIdx(Math.max(0, idx - 1));
+    lastHandledPhoto.current = null;
     setDone(false);
   };
+
 
   return (
     <main className="mx-auto max-w-md min-h-[calc(100vh-4rem)] px-5 pt-4 pb-8 flex flex-col">

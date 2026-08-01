@@ -2,8 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Flame, ImagePlus, LogIn, Users, Vote } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { photoSpots } from "@/lib/mock-data";
-import { getHomeStats, listMyVotes } from "@/lib/votes.functions";
+import { getHomeStats, getTopSpots, listMyVotes } from "@/lib/votes.functions";
 import { getSpotEnrichments } from "@/lib/kakao.functions";
 import { useSession } from "@/hooks/use-session";
 
@@ -17,16 +16,23 @@ function Home() {
   const { user, loading } = useSession();
   const fetchStats = useServerFn(getHomeStats);
   const fetchMyVotes = useServerFn(listMyVotes);
+  const fetchTopSpots = useServerFn(getTopSpots);
   const fetchSpotEnrichments = useServerFn(getSpotEnrichments);
 
   const statsQuery = useQuery({
     queryKey: ["home-stats"],
     queryFn: () => fetchStats(),
   });
-  const spotNames = photoSpots.map((s) => s.name);
+  const topSpotsQuery = useQuery({
+    queryKey: ["top-spots"],
+    queryFn: () => fetchTopSpots(),
+  });
+  const spots = topSpotsQuery.data ?? [];
+  const spotNames = spots.map((s) => s.name);
   const spotEnrichmentQuery = useQuery({
     queryKey: ["spot-enrichments", ...spotNames],
     queryFn: () => fetchSpotEnrichments({ data: { names: spotNames } }),
+    enabled: spotNames.length > 0,
     staleTime: 60 * 60 * 1000,
   });
   const myVotesQuery = useQuery({
@@ -34,6 +40,7 @@ function Home() {
     queryFn: () => fetchMyVotes(),
     enabled: !!user,
   });
+
 
   const requireAuth = () => {
     if (!user) {
@@ -74,25 +81,34 @@ function Home() {
           <Flame className="size-5 text-primary" />
           <h2 className="font-semibold">이번 주 인기 포토스팟</h2>
         </div>
+        {spots.length === 0 ? (
+          <p className="text-sm text-muted-foreground surface-card p-4">
+            {topSpotsQuery.isLoading
+              ? "포토스팟을 집계하는 중..."
+              : "아직 집계된 포토스팟이 없어요. 위치 정보를 켜고 투표를 만들어보세요!"}
+          </p>
+        ) : (
         <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-5 px-5 snap-x snap-mandatory">
-          {photoSpots.map((spot) => {
+          {spots.map((spot, i) => {
             const enrichment = spotEnrichmentQuery.data?.find((e) => e.name === spot.name);
-            // Map API image takes precedence; NEVER show user-uploaded photos here.
-            const imageSrc = enrichment?.imageDataUrl ?? spot.image;
-            const keywords = enrichment?.keywords?.length ? enrichment.keywords : spot.tags;
+            // Map API image only; NEVER show user-uploaded photos here.
+            const imageSrc = enrichment?.imageDataUrl ?? null;
+            const keywords = enrichment?.keywords ?? [];
             return (
-              <div key={spot.rank} className="snap-start shrink-0 w-[240px] surface-card overflow-hidden">
-                <div className="relative aspect-[4/3]">
-                  <img src={imageSrc} alt={spot.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
+              <div key={spot.name} className="snap-start shrink-0 w-[240px] surface-card overflow-hidden">
+                <div className="relative aspect-[4/3] bg-muted">
+                  {imageSrc && (
+                    <img src={imageSrc} alt={`${spot.name} 지도`} loading="lazy" className="absolute inset-0 size-full object-cover" />
+                  )}
                   <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-background/70 backdrop-blur text-xs font-semibold">
-                    🏆 {spot.rank}위
+                    🏆 {i + 1}위
                   </div>
                   <div className="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-t from-background to-transparent" />
                 </div>
                 <div className="p-3.5">
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold">{spot.name}</p>
-                    <p className="text-xs text-primary font-bold">추천율 {spot.recommend}%</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold truncate">{spot.name}</p>
+                    <p className="text-xs text-primary font-bold shrink-0">❤️ {spot.likes}</p>
                   </div>
                   <div className="mt-2 flex gap-1.5 flex-wrap">
                     {keywords.slice(0, 3).map((t) => (
@@ -106,6 +122,8 @@ function Home() {
             );
           })}
         </div>
+        )}
+
       </section>
 
       {user ? (
