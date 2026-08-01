@@ -343,3 +343,53 @@ export const getHomeStats = createServerFn({ method: "GET" }).handler(async () =
     votesToday: todayVotes ?? 0,
   };
 });
+
+// ---------- getTopSpots (public) ----------
+// Ranks real user vote locations by total likes received. Top 3 only.
+// Only votes that opted into location usage have a location_name, so opting out
+// keeps a vote out of this ranking entirely.
+export const getTopSpots = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  const { data: votes } = await supabaseAdmin
+    .from("votes")
+    .select("id, location_name")
+    .not("location_name", "is", null);
+  if (!votes || votes.length === 0) return [] as { name: string; likes: number; recommend: number }[];
+
+  const voteIds = votes.map((v) => v.id);
+  const { data: photos } = await supabaseAdmin
+    .from("vote_photos")
+    .select("id, vote_id")
+    .in("vote_id", voteIds);
+  const photoIds = (photos ?? []).map((p) => p.id);
+  if (photoIds.length === 0) return [];
+
+  const { data: choices } = await supabaseAdmin
+    .from("vote_choices")
+    .select("photo_id, liked")
+    .in("photo_id", photoIds);
+
+  const voteByPhoto = new Map((photos ?? []).map((p) => [p.id, p.vote_id]));
+  const locByVote = new Map(votes.map((v) => [v.id, (v.location_name ?? "").trim()]));
+
+  const agg = new Map<string, { likes: number; total: number }>();
+  for (const c of choices ?? []) {
+    const voteId = voteByPhoto.get(c.photo_id);
+    const loc = voteId ? locByVote.get(voteId) : null;
+    if (!loc) continue;
+    const a = agg.get(loc) ?? { likes: 0, total: 0 };
+    a.total += 1;
+    if (c.liked) a.likes += 1;
+    agg.set(loc, a);
+  }
+
+  return Array.from(agg, ([name, a]) => ({
+    name,
+    likes: a.likes,
+    recommend: a.total > 0 ? Math.round((a.likes / a.total) * 100) : 0,
+  }))
+    .filter((s) => s.likes > 0)
+    .sort((a, b) => b.likes - a.likes || b.recommend - a.recommend)
+    .slice(0, 3);
+});
