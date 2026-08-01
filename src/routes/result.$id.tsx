@@ -104,19 +104,27 @@ function Result() {
               </div>
             )}
           </>
+        ) : ai.isPending || needsAnalysis ? (
+          <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin text-primary" />
+            AI가 베스트컷을 분석하고 있어요...
+          </div>
         ) : (
           <div className="mt-3 space-y-3">
             <p className="text-sm text-muted-foreground">
-              친구들의 반응을 바탕으로 왜 이 사진들이 좋았는지 AI가 분석해드려요.
+              {participantCount === 0
+                ? "아직 표가 없어요. 친구들에게 링크를 보내면 AI 분석이 자동으로 실행돼요."
+                : "분석을 불러오지 못했어요. 다시 시도해 주세요."}
             </p>
-            <button
-              onClick={() => ai.mutate()}
-              disabled={ai.isPending || participantCount === 0}
-              className="w-full rounded-[14px] bg-gradient-brand py-3 font-semibold text-background text-sm flex items-center justify-center gap-2 disabled:opacity-60"
-            >
-              {ai.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-              {ai.isPending ? "분석 중..." : participantCount === 0 ? "표가 모이면 분석 가능해요" : "AI 분석 실행"}
-            </button>
+            {participantCount > 0 && (
+              <button
+                onClick={() => ai.mutate()}
+                disabled={ai.isPending}
+                className="w-full rounded-[14px] bg-gradient-brand py-3 font-semibold text-background text-sm flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                <Sparkles className="size-4" /> 다시 분석하기
+              </button>
+            )}
           </div>
         )}
       </section>
