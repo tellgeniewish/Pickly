@@ -2,8 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Flame, ImagePlus, LogIn, Users, Vote } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { photoSpots } from "@/lib/mock-data";
-import { getHomeStats, listMyVotes } from "@/lib/votes.functions";
+import { getHomeStats, getTopSpots, listMyVotes } from "@/lib/votes.functions";
 import { getSpotEnrichments } from "@/lib/kakao.functions";
 import { useSession } from "@/hooks/use-session";
 
@@ -17,16 +16,23 @@ function Home() {
   const { user, loading } = useSession();
   const fetchStats = useServerFn(getHomeStats);
   const fetchMyVotes = useServerFn(listMyVotes);
+  const fetchTopSpots = useServerFn(getTopSpots);
   const fetchSpotEnrichments = useServerFn(getSpotEnrichments);
 
   const statsQuery = useQuery({
     queryKey: ["home-stats"],
     queryFn: () => fetchStats(),
   });
-  const spotNames = photoSpots.map((s) => s.name);
+  const topSpotsQuery = useQuery({
+    queryKey: ["top-spots"],
+    queryFn: () => fetchTopSpots(),
+  });
+  const spots = topSpotsQuery.data ?? [];
+  const spotNames = spots.map((s) => s.name);
   const spotEnrichmentQuery = useQuery({
     queryKey: ["spot-enrichments", ...spotNames],
     queryFn: () => fetchSpotEnrichments({ data: { names: spotNames } }),
+    enabled: spotNames.length > 0,
     staleTime: 60 * 60 * 1000,
   });
   const myVotesQuery = useQuery({
@@ -34,6 +40,7 @@ function Home() {
     queryFn: () => fetchMyVotes(),
     enabled: !!user,
   });
+
 
   const requireAuth = () => {
     if (!user) {
