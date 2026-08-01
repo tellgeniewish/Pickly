@@ -107,7 +107,7 @@ function Home() {
                 </div>
                 <div className="p-3.5">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold truncate">{enrichment?.placeName ?? spot.name}</p>
+                    <p className="font-semibold truncate">{spot.name}</p>
                     <p className="text-xs text-primary font-bold shrink-0">❤️ {spot.likes}</p>
                   </div>
                   <div className="mt-2 flex gap-1.5 flex-wrap">
