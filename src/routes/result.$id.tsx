@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 import { Loader2, Share2, Sparkles } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -17,6 +18,7 @@ function Result() {
   const qc = useQueryClient();
   const fetchResults = useServerFn(getVoteResults);
   const runAi = useServerFn(runAiAnalysis);
+  const autoRan = useRef(false);
 
   const q = useQuery({
     queryKey: ["results", id],
@@ -26,17 +28,27 @@ function Result() {
   const ai = useMutation({
     mutationFn: () => runAi({ data: { id } }),
     onSuccess: () => {
-      toast.success("AI 분석 완료!");
       qc.invalidateQueries({ queryKey: ["results", id] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "분석 실패"),
   });
+
+  // Auto-run once: the result is cached in the DB, so any later viewer just reads it.
+  const needsAnalysis = !!q.data && !q.data.ai && q.data.participantCount > 0;
+  const aiMutate = ai.mutate;
+  useEffect(() => {
+    if (needsAnalysis && !autoRan.current) {
+      autoRan.current = true;
+      aiMutate();
+    }
+  }, [needsAnalysis, aiMutate]);
 
   if (q.isLoading)
     return <main className="mx-auto max-w-md px-5 pt-10 text-center text-muted-foreground">불러오는 중...</main>;
   if (!q.data) return <main className="mx-auto max-w-md px-5 pt-10 text-center">투표를 찾을 수 없어요.</main>;
 
   const { vote, participantCount, ranked, ai: aiData } = q.data;
+
 
   const share = async () => {
     const url = `${window.location.origin}/vote/${id}`;
