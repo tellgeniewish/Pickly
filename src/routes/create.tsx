@@ -39,6 +39,7 @@ function Create() {
   const [submitting, setSubmitting] = useState(false);
   const [locationGroups, setLocationGroups] = useState<LocationGroup[]>([]);
   const [useLocationForRanking, setUseLocationForRanking] = useState(true);
+  const [manualLocation, setManualLocation] = useState("");
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -180,7 +181,7 @@ function Create() {
       }
       // Only include location for ranking when user opts in.
       const derivedLocation = useLocationForRanking
-        ? (locationGroups.find((g) => g.name)?.name ?? null)
+        ? (locationGroups.find((g) => g.name)?.name ?? (manualLocation.trim() || null))
         : null;
       const res = await create({
         data: {
@@ -308,9 +309,17 @@ function Create() {
                   사진을 추가하면 위치가 자동으로 여기 표시돼요.
                 </p>
               ) : locationGroups.length === 0 ? (
-                <p className="mt-3 text-xs text-muted-foreground/80">
-                  추가한 사진에서 EXIF 위치 정보를 찾지 못했어요. (카메라 앱 위치 기록이 꺼져 있거나, 스크린샷/편집본일 수 있어요.)
-                </p>
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs text-muted-foreground/80">
+                    추가한 사진에서 EXIF 위치 정보를 찾지 못했어요. (카메라 앱 위치 기록이 꺼져 있거나, 스크린샷/편집본/카톡 전송본일 수 있어요.) 아래에 장소명을 직접 입력하면 인기 포토스팟 통계에 반영돼요.
+                  </p>
+                  <input
+                    value={manualLocation}
+                    onChange={(e) => setManualLocation(e.target.value)}
+                    placeholder="예) 서울숲"
+                    className="w-full bg-background/50 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground/60 outline-none focus:border-primary"
+                  />
+                </div>
               ) : (
                 <div className="mt-3 border-t border-border/60 pt-3 space-y-3">
                   {locationGroups.map((g, idx) => {

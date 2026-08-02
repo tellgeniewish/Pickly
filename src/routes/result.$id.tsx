@@ -26,7 +26,7 @@ function Result() {
   });
 
   const ai = useMutation({
-    mutationFn: () => runAi({ data: { id } }),
+    mutationFn: (force?: boolean) => runAi({ data: { id, force: force ?? false } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["results", id] });
     },
@@ -39,7 +39,7 @@ function Result() {
   useEffect(() => {
     if (needsAnalysis && !autoRan.current) {
       autoRan.current = true;
-      aiMutate();
+      aiMutate(false);
     }
   }, [needsAnalysis, aiMutate]);
 
@@ -103,6 +103,21 @@ function Result() {
                 ))}
               </div>
             )}
+            <button
+              onClick={() => ai.mutate(true)}
+              disabled={ai.isPending}
+              className="mt-4 w-full rounded-[14px] border border-primary/40 bg-gradient-brand-soft py-2.5 text-sm font-semibold text-primary flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {ai.isPending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" /> 재분석 중...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="size-4" /> AI 재분석
+                </>
+              )}
+            </button>
           </>
         ) : ai.isPending || needsAnalysis ? (
           <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
@@ -118,7 +133,7 @@ function Result() {
             </p>
             {participantCount > 0 && (
               <button
-                onClick={() => ai.mutate()}
+                onClick={() => ai.mutate(true)}
                 disabled={ai.isPending}
                 className="w-full rounded-[14px] bg-gradient-brand py-3 font-semibold text-background text-sm flex items-center justify-center gap-2 disabled:opacity-60"
               >
