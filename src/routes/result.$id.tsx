@@ -26,7 +26,7 @@ function Result() {
   });
 
   const ai = useMutation({
-    mutationFn: () => runAi({ data: { id } }),
+    mutationFn: (force?: boolean) => runAi({ data: { id, force: force ?? false } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["results", id] });
     },
