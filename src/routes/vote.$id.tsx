@@ -165,13 +165,26 @@ function SwipeCard({
   return (
     <div
       onPointerDown={onPointerDown}
-      className="relative w-full max-w-[340px] aspect-[3/4] rounded-[24px] overflow-hidden surface-card cursor-grab active:cursor-grabbing select-none touch-none transition-transform"
+      className="relative w-full max-w-[340px] rounded-[24px] overflow-hidden surface-card cursor-grab active:cursor-grabbing select-none touch-none transition-transform"
       style={{
         transform: `translateX(${tx}px) rotate(${rot}deg)`,
         transition: drag === 0 ? "transform 0.3s ease" : "none",
       }}
     >
-      <img src={url} alt="투표 사진" className="absolute inset-0 size-full object-cover pointer-events-none" draggable={false} />
+      {/* Blurred fill keeps the card shape while the real photo is shown uncropped. */}
+      <img
+        src={url}
+        alt=""
+        aria-hidden
+        className="absolute inset-0 size-full object-cover scale-110 blur-2xl opacity-40 pointer-events-none"
+        draggable={false}
+      />
+      <img
+        src={url}
+        alt="투표 사진"
+        className="relative block w-full max-h-[58vh] object-contain pointer-events-none"
+        draggable={false}
+      />
       <div className="absolute top-6 right-6 px-3 py-1.5 rounded-lg border-2 border-primary text-primary font-extrabold tracking-wider rotate-12 transition-opacity" style={{ opacity: Math.max(0, drag) }}>
         LIKE
       </div>

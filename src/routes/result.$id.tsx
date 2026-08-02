@@ -103,6 +103,21 @@ function Result() {
                 ))}
               </div>
             )}
+            <button
+              onClick={() => ai.mutate()}
+              disabled={ai.isPending}
+              className="mt-4 w-full rounded-[14px] border border-primary/40 bg-gradient-brand-soft py-2.5 text-sm font-semibold text-primary flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {ai.isPending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" /> 재분석 중...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="size-4" /> AI 재분석
+                </>
+              )}
+            </button>
           </>
         ) : ai.isPending || needsAnalysis ? (
           <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
