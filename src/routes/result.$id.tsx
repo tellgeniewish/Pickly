@@ -39,7 +39,7 @@ function Result() {
   useEffect(() => {
     if (needsAnalysis && !autoRan.current) {
       autoRan.current = true;
-      aiMutate();
+      aiMutate(false);
     }
   }, [needsAnalysis, aiMutate]);
 
@@ -104,7 +104,7 @@ function Result() {
               </div>
             )}
             <button
-              onClick={() => ai.mutate()}
+              onClick={() => ai.mutate(true)}
               disabled={ai.isPending}
               className="mt-4 w-full rounded-[14px] border border-primary/40 bg-gradient-brand-soft py-2.5 text-sm font-semibold text-primary flex items-center justify-center gap-2 disabled:opacity-60"
             >
@@ -133,7 +133,7 @@ function Result() {
             </p>
             {participantCount > 0 && (
               <button
-                onClick={() => ai.mutate()}
+                onClick={() => ai.mutate(true)}
                 disabled={ai.isPending}
                 className="w-full rounded-[14px] bg-gradient-brand py-3 font-semibold text-background text-sm flex items-center justify-center gap-2 disabled:opacity-60"
               >
