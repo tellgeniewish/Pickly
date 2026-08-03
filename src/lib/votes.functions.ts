@@ -397,19 +397,46 @@ export const getHomeStats = createServerFn({ method: "GET" }).handler(async () =
 export const getTopSpots = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const { data: votes } = await supabaseAdmin
+  const { data: allVotes } = await supabaseAdmin
     .from("votes")
-    .select("id, location_name")
-    .not("location_name", "is", null);
-  if (!votes || votes.length === 0) return [] as { name: string; likes: number; recommend: number }[];
+    .select("id, location_name, use_location");
+  if (!allVotes || allVotes.length === 0)
+    return [] as { name: string; likes: number; recommend: number }[];
 
-  const voteIds = votes.map((v) => v.id);
+  const eligible = allVotes.filter((v) => v.use_location !== false);
+  const voteIds = eligible.map((v) => v.id);
+  if (voteIds.length === 0) return [];
+
   const { data: photos } = await supabaseAdmin
     .from("vote_photos")
-    .select("id, vote_id")
+    .select("id, vote_id, lat, lng")
     .in("vote_id", voteIds);
   const photoIds = (photos ?? []).map((p) => p.id);
   if (photoIds.length === 0) return [];
+
+  // Self-heal: a vote created before server-side geocoding (or whose client-side
+  // geocode failed) still has GPS on its photos — resolve it now and persist it,
+  // so the ranking reflects every location-enabled vote.
+  const missing = eligible.filter((v) => !v.location_name);
+  if (missing.length > 0) {
+    const { resolvePlaceName } = await import("./kakao.server");
+    await Promise.all(
+      missing.map(async (v) => {
+        const p = (photos ?? []).find(
+          (ph) => ph.vote_id === v.id && ph.lat != null && ph.lng != null,
+        );
+        if (!p) return;
+        const name = await resolvePlaceName(p.lat as number, p.lng as number);
+        if (!name) return;
+        v.location_name = name;
+        await supabaseAdmin.from("votes").update({ location_name: name }).eq("id", v.id);
+      }),
+    );
+  }
+
+  const votes = eligible.filter((v) => !!v.location_name);
+  if (votes.length === 0) return [];
+
 
   const { data: choices } = await supabaseAdmin
     .from("vote_choices")
