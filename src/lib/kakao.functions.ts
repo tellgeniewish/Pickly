@@ -32,30 +32,10 @@ async function kakaoFetch(path: string): Promise<any | null> {
 export const reverseGeocode = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ lat: z.number(), lng: z.number() }).parse(input))
   .handler(async ({ data }) => {
-    const codes = ["AT4", "CE7", "FD6", "CT1", "CS2", "SW8", "PS3", "HP8", "AC5", "PK6", "OL7"];
-    let best: { name: string; dist: number } | null = null;
-    for (const code of codes) {
-      const j = await kakaoFetch(
-        `/v2/local/search/category.json?category_group_code=${code}&x=${data.lng}&y=${data.lat}&radius=500&sort=distance&size=1`,
-      );
-      const doc = j?.documents?.[0];
-      if (doc?.place_name) {
-        const dist = Number(doc.distance ?? 0);
-        if (!best || dist < best.dist) best = { name: doc.place_name as string, dist };
-        if (dist < 30) break;
-      }
-    }
-    if (best) return { name: best.name };
-    const j = await kakaoFetch(
-      `/v2/local/geo/coord2regioncode.json?x=${data.lng}&y=${data.lat}`,
-    );
-    const doc = j?.documents?.find((d: any) => d.region_type === "H") ?? j?.documents?.[0];
-    if (!doc) return { name: null as string | null };
-    const name = [doc.region_1depth_name, doc.region_2depth_name, doc.region_3depth_name]
-      .filter(Boolean)
-      .join(" ");
-    return { name: name || null };
+    const { resolvePlaceName } = await import("./kakao.server");
+    return { name: await resolvePlaceName(data.lat, data.lng) };
   });
+
 
 // Given a place query, return keywords + a representative image (Kakao static map).
 // We deliberately DO NOT return user-generated photos — only a Kakao static map for the place location.

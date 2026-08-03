@@ -14,20 +14,45 @@ export const createVote = createServerFn({ method: "POST" })
       .object({
         title: z.string().min(1).max(200),
         locationName: z.string().max(120).nullable().optional(),
+        useLocation: z.boolean().optional(),
         deadlineHours: z.number().int().min(1).max(720),
-        photoPaths: z.array(z.string().min(1)).min(2).max(10),
+        photos: z
+          .array(
+            z.object({
+              path: z.string().min(1),
+              lat: z.number().nullable().optional(),
+              lng: z.number().nullable().optional(),
+            }),
+          )
+          .min(2)
+          .max(10),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    const useLocation = data.useLocation !== false;
+
+    // Resolve the location name on the SERVER so a flaky client-side geocode can
+    // never leave the vote without a location (which would drop it from the
+    // popular-spot ranking).
+    let locationName = useLocation ? (data.locationName?.trim() || null) : null;
+    if (useLocation && !locationName) {
+      const withGps = data.photos.find((p) => p.lat != null && p.lng != null);
+      if (withGps) {
+        const { resolvePlaceName } = await import("./kakao.server");
+        locationName = await resolvePlaceName(withGps.lat!, withGps.lng!);
+      }
+    }
+
     const closesAt = new Date(Date.now() + data.deadlineHours * 3600 * 1000).toISOString();
     const { data: vote, error } = await supabase
       .from("votes")
       .insert({
         owner_id: userId,
         title: data.title,
-        location_name: data.locationName ?? null,
+        location_name: locationName,
+        use_location: useLocation,
         deadline_hours: data.deadlineHours,
         closes_at: closesAt,
       })
@@ -35,15 +60,18 @@ export const createVote = createServerFn({ method: "POST" })
       .single();
     if (error || !vote) throw new Error(error?.message ?? "투표 생성 실패");
 
-    const rows = data.photoPaths.map((p, i) => ({
+    const rows = data.photos.map((p, i) => ({
       vote_id: vote.id,
-      storage_path: p,
+      storage_path: p.path,
       order_index: i,
+      lat: p.lat ?? null,
+      lng: p.lng ?? null,
     }));
     const { error: pErr } = await supabase.from("vote_photos").insert(rows);
     if (pErr) throw new Error(pErr.message);
     return { id: vote.id };
   });
+
 
 // ---------- getVote (public) ----------
 export const getVote = createServerFn({ method: "GET" })
@@ -369,19 +397,46 @@ export const getHomeStats = createServerFn({ method: "GET" }).handler(async () =
 export const getTopSpots = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const { data: votes } = await supabaseAdmin
+  const { data: allVotes } = await supabaseAdmin
     .from("votes")
-    .select("id, location_name")
-    .not("location_name", "is", null);
-  if (!votes || votes.length === 0) return [] as { name: string; likes: number; recommend: number }[];
+    .select("id, location_name, use_location");
+  if (!allVotes || allVotes.length === 0)
+    return [] as { name: string; likes: number; recommend: number }[];
 
-  const voteIds = votes.map((v) => v.id);
+  const eligible = allVotes.filter((v) => v.use_location !== false);
+  const voteIds = eligible.map((v) => v.id);
+  if (voteIds.length === 0) return [];
+
   const { data: photos } = await supabaseAdmin
     .from("vote_photos")
-    .select("id, vote_id")
+    .select("id, vote_id, lat, lng")
     .in("vote_id", voteIds);
   const photoIds = (photos ?? []).map((p) => p.id);
   if (photoIds.length === 0) return [];
+
+  // Self-heal: a vote created before server-side geocoding (or whose client-side
+  // geocode failed) still has GPS on its photos — resolve it now and persist it,
+  // so the ranking reflects every location-enabled vote.
+  const missing = eligible.filter((v) => !v.location_name);
+  if (missing.length > 0) {
+    const { resolvePlaceName } = await import("./kakao.server");
+    await Promise.all(
+      missing.map(async (v) => {
+        const p = (photos ?? []).find(
+          (ph) => ph.vote_id === v.id && ph.lat != null && ph.lng != null,
+        );
+        if (!p) return;
+        const name = await resolvePlaceName(p.lat as number, p.lng as number);
+        if (!name) return;
+        v.location_name = name;
+        await supabaseAdmin.from("votes").update({ location_name: name }).eq("id", v.id);
+      }),
+    );
+  }
+
+  const votes = eligible.filter((v) => !!v.location_name);
+  if (votes.length === 0) return [];
+
 
   const { data: choices } = await supabaseAdmin
     .from("vote_choices")

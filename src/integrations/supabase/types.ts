@@ -113,6 +113,8 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          lat: number | null
+          lng: number | null
           order_index: number
           storage_path: string
           vote_id: string
@@ -120,6 +122,8 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          lat?: number | null
+          lng?: number | null
           order_index?: number
           storage_path: string
           vote_id: string
@@ -127,6 +131,8 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          lat?: number | null
+          lng?: number | null
           order_index?: number
           storage_path?: string
           vote_id?: string
@@ -186,6 +192,7 @@ export type Database = {
           owner_id: string
           status: string
           title: string
+          use_location: boolean
         }
         Insert: {
           closes_at?: string
@@ -196,6 +203,7 @@ export type Database = {
           owner_id: string
           status?: string
           title: string
+          use_location?: boolean
         }
         Update: {
           closes_at?: string
@@ -206,6 +214,7 @@ export type Database = {
           owner_id?: string
           status?: string
           title?: string
+          use_location?: boolean
         }
         Relationships: []
       }
