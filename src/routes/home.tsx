@@ -26,7 +26,12 @@ function Home() {
   const topSpotsQuery = useQuery({
     queryKey: ["top-spots"],
     queryFn: () => fetchTopSpots(),
+    // Always re-tally on every visit so the top 3 reflect the latest likes.
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
+
   const spots = topSpotsQuery.data ?? [];
   const spotNames = spots.map((s) => s.name);
   const spotEnrichmentQuery = useQuery({
