@@ -168,7 +168,7 @@ function Create() {
     setSubmitting(true);
     try {
       const voteId = crypto.randomUUID();
-      const paths: string[] = [];
+      const uploaded: { path: string; lat: number | null; lng: number | null }[] = [];
       for (let i = 0; i < photos.length; i++) {
         const p = photos[i];
         const ext = p.file.name.split(".").pop()?.toLowerCase() || "jpg";
@@ -177,20 +177,23 @@ function Create() {
           .from("vote-photos")
           .upload(path, p.file, { contentType: p.file.type, upsert: false });
         if (error) throw error;
-        paths.push(path);
+        uploaded.push({ path, lat: p.lat ?? null, lng: p.lng ?? null });
       }
-      // Only include location for ranking when user opts in.
+      // Only include location for ranking when user opts in. The server re-resolves
+      // the place name from the photo GPS when the client-side lookup came back empty.
       const derivedLocation = useLocationForRanking
-        ? (locationGroups.find((g) => g.name)?.name ?? (manualLocation.trim() || null))
+        ? (locationGroups.find((g) => g.name)?.name ?? null)
         : null;
       const res = await create({
         data: {
           title: title.trim(),
           locationName: derivedLocation,
+          useLocation: useLocationForRanking,
           deadlineHours: deadlineDays * 24,
-          photoPaths: paths,
+          photos: uploaded,
         },
       });
+
       toast.success("투표가 생성됐어요!");
       navigate({ to: "/share/$id", params: { id: res.id } });
     } catch (e) {
