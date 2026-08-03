@@ -14,20 +14,45 @@ export const createVote = createServerFn({ method: "POST" })
       .object({
         title: z.string().min(1).max(200),
         locationName: z.string().max(120).nullable().optional(),
+        useLocation: z.boolean().optional(),
         deadlineHours: z.number().int().min(1).max(720),
-        photoPaths: z.array(z.string().min(1)).min(2).max(10),
+        photos: z
+          .array(
+            z.object({
+              path: z.string().min(1),
+              lat: z.number().nullable().optional(),
+              lng: z.number().nullable().optional(),
+            }),
+          )
+          .min(2)
+          .max(10),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    const useLocation = data.useLocation !== false;
+
+    // Resolve the location name on the SERVER so a flaky client-side geocode can
+    // never leave the vote without a location (which would drop it from the
+    // popular-spot ranking).
+    let locationName = useLocation ? (data.locationName?.trim() || null) : null;
+    if (useLocation && !locationName) {
+      const withGps = data.photos.find((p) => p.lat != null && p.lng != null);
+      if (withGps) {
+        const { resolvePlaceName } = await import("./kakao.server");
+        locationName = await resolvePlaceName(withGps.lat!, withGps.lng!);
+      }
+    }
+
     const closesAt = new Date(Date.now() + data.deadlineHours * 3600 * 1000).toISOString();
     const { data: vote, error } = await supabase
       .from("votes")
       .insert({
         owner_id: userId,
         title: data.title,
-        location_name: data.locationName ?? null,
+        location_name: locationName,
+        use_location: useLocation,
         deadline_hours: data.deadlineHours,
         closes_at: closesAt,
       })
@@ -35,15 +60,18 @@ export const createVote = createServerFn({ method: "POST" })
       .single();
     if (error || !vote) throw new Error(error?.message ?? "투표 생성 실패");
 
-    const rows = data.photoPaths.map((p, i) => ({
+    const rows = data.photos.map((p, i) => ({
       vote_id: vote.id,
-      storage_path: p,
+      storage_path: p.path,
       order_index: i,
+      lat: p.lat ?? null,
+      lng: p.lng ?? null,
     }));
     const { error: pErr } = await supabase.from("vote_photos").insert(rows);
     if (pErr) throw new Error(pErr.message);
     return { id: vote.id };
   });
+
 
 // ---------- getVote (public) ----------
 export const getVote = createServerFn({ method: "GET" })
