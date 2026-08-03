@@ -39,9 +39,9 @@ export const createVote = createServerFn({ method: "POST" })
     let locationName = useLocation ? (data.locationName?.trim() || null) : null;
     if (useLocation && !locationName) {
       const withGps = data.photos.find((p) => p.lat != null && p.lng != null);
-      if (withGps) {
+      if (withGps?.lat != null && withGps.lng != null) {
         const { resolvePlaceName } = await import("./kakao.server");
-        locationName = await resolvePlaceName(withGps.lat!, withGps.lng!);
+        locationName = await resolvePlaceName(withGps.lat, withGps.lng);
       }
     }
 
@@ -414,55 +414,54 @@ export const getTopSpots = createServerFn({ method: "GET" }).handler(async () =>
   const photoIds = (photos ?? []).map((p) => p.id);
   if (photoIds.length === 0) return [];
 
-  // Self-heal: a vote created before server-side geocoding (or whose client-side
-  // geocode failed) still has GPS on its photos — resolve it now and persist it,
-  // so the ranking reflects every location-enabled vote.
-  const missing = eligible.filter((v) => !v.location_name);
-  if (missing.length > 0) {
-    const { resolvePlaceName } = await import("./kakao.server");
-    await Promise.all(
-      missing.map(async (v) => {
-        const p = (photos ?? []).find(
-          (ph) => ph.vote_id === v.id && ph.lat != null && ph.lng != null,
-        );
-        if (!p) return;
-        const name = await resolvePlaceName(p.lat as number, p.lng as number);
-        if (!name) return;
-        v.location_name = name;
-        await supabaseAdmin.from("votes").update({ location_name: name }).eq("id", v.id);
-      }),
-    );
-  }
-
-  const votes = eligible.filter((v) => !!v.location_name);
-  if (votes.length === 0) return [];
-
-
   const { data: choices } = await supabaseAdmin
     .from("vote_choices")
     .select("photo_id, liked")
     .in("photo_id", photoIds);
 
-  const voteByPhoto = new Map((photos ?? []).map((p) => [p.id, p.vote_id]));
-  const locByVote = new Map(votes.map((v) => [v.id, (v.location_name ?? "").trim()]));
-
-  const agg = new Map<string, { likes: number; total: number }>();
-  for (const c of choices ?? []) {
-    const voteId = voteByPhoto.get(c.photo_id);
-    const loc = voteId ? locByVote.get(voteId) : null;
-    if (!loc) continue;
-    const a = agg.get(loc) ?? { likes: 0, total: 0 };
-    a.total += 1;
-    if (c.liked) a.likes += 1;
-    agg.set(loc, a);
+  // Rank the locations of the actual photos, not one location copied onto the
+  // whole vote. Photos within 50m are one spot, matching the create screen.
+  const gpsPhotos = (photos ?? []).filter(
+    (p): p is typeof p & { lat: number; lng: number } => p.lat != null && p.lng != null,
+  );
+  if (gpsPhotos.length === 0) return [];
+  const choiceCounts = new Map<string, { likes: number; total: number }>();
+  for (const choice of choices ?? []) {
+    const count = choiceCounts.get(choice.photo_id) ?? { likes: 0, total: 0 };
+    count.total += 1;
+    if (choice.liked) count.likes += 1;
+    choiceCounts.set(choice.photo_id, count);
   }
 
-  return Array.from(agg, ([name, a]) => ({
-    name,
-    likes: a.likes,
-    recommend: a.total > 0 ? Math.round((a.likes / a.total) * 100) : 0,
-  }))
-    .filter((s) => s.likes > 0)
-    .sort((a, b) => b.likes - a.likes || b.recommend - a.recommend)
+  const { haversineMeters } = await import("./geo");
+  const clusters: Array<{ lat: number; lng: number; count: number; likes: number; total: number }> = [];
+  for (const photo of gpsPhotos) {
+    const counts = choiceCounts.get(photo.id);
+    if (!counts) continue;
+    const cluster = clusters.find(
+      (item) => haversineMeters({ lat: item.lat, lng: item.lng }, photo) <= 50,
+    );
+    if (cluster) {
+      cluster.count += 1;
+      cluster.lat += (photo.lat - cluster.lat) / cluster.count;
+      cluster.lng += (photo.lng - cluster.lng) / cluster.count;
+      cluster.likes += counts.likes;
+      cluster.total += counts.total;
+    } else {
+      clusters.push({ lat: photo.lat, lng: photo.lng, count: 1, ...counts });
+    }
+  }
+
+  const top = clusters
+    .filter((item) => item.likes > 0)
+    .sort((a, b) => b.likes - a.likes || b.likes / b.total - a.likes / a.total)
     .slice(0, 3);
+  const { resolvePlaceName } = await import("./kakao.server");
+  return Promise.all(
+    top.map(async (item) => ({
+      name: (await resolvePlaceName(item.lat, item.lng)) ?? `${item.lat.toFixed(4)}, ${item.lng.toFixed(4)}`,
+      likes: item.likes,
+      recommend: Math.round((item.likes / item.total) * 100),
+    })),
+  );
 });
