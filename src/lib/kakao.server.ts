@@ -56,10 +56,19 @@ async function osmReverseGeocode(lat: number, lng: number): Promise<string | nul
 }
 
 /**
- * lat/lng -> nearest POI place name (e.g. "서울숲"), falling back to the
- * administrative region name. Returns null only when Kakao is unreachable.
+ * lat/lng -> human readable place name.
+ * Primary: Kakao Local "좌표 -> 행정구역정보" (coord2regioncode) — the API the
+ * product spec is built on. Then the nearest POI, then OSM as a last resort.
  */
 export async function resolvePlaceName(lat: number, lng: number): Promise<string | null> {
+  // 1) Kakao coord2regioncode: 행정동 기준 지역명 (예: "성수동1가")
+  const region = await kakaoFetch(`/v2/local/geo/coord2regioncode.json?x=${lng}&y=${lat}`);
+  const rdoc = region?.documents?.find((d: any) => d.region_type === "H") ?? region?.documents?.[0];
+  const regionName = rdoc
+    ? (rdoc.region_3depth_name || rdoc.region_2depth_name || rdoc.address_name || null)
+    : null;
+
+  // 2) Nearby POI (예: "서울숲") — more recognisable than a 행정동 when available.
   const codes = ["AT4", "CE7", "FD6", "CT1", "CS2", "SW8", "PS3", "HP8", "AC5", "PK6", "OL7"];
   let best: { name: string; dist: number } | null = null;
   for (const code of codes) {
@@ -74,18 +83,11 @@ export async function resolvePlaceName(lat: number, lng: number): Promise<string
     }
   }
   if (best) return best.name;
-
-  const j = await kakaoFetch(`/v2/local/geo/coord2regioncode.json?x=${lng}&y=${lat}`);
-  const doc = j?.documents?.find((d: any) => d.region_type === "H") ?? j?.documents?.[0];
-  if (doc) {
-    const name = [doc.region_1depth_name, doc.region_2depth_name, doc.region_3depth_name]
-      .filter(Boolean)
-      .join(" ");
-    if (name) return name;
-  }
+  if (regionName) return regionName;
 
   // Kakao may reject Local API calls when the app's Map/Local product is not
   // enabled. Keep location-based ranking functional with a public reverse
   // geocoder until the Kakao app permission is enabled.
   return osmReverseGeocode(lat, lng);
 }
+
