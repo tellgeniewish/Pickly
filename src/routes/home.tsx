@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Flame, ImagePlus, LogIn, Users, Vote } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getHomeStats, getTopSpots, listMyVotes } from "@/lib/votes.functions";
-import { getSpotEnrichments } from "@/lib/kakao.functions";
 import { useSession } from "@/hooks/use-session";
 
 export const Route = createFileRoute("/home")({
@@ -17,7 +16,6 @@ function Home() {
   const fetchStats = useServerFn(getHomeStats);
   const fetchMyVotes = useServerFn(listMyVotes);
   const fetchTopSpots = useServerFn(getTopSpots);
-  const fetchSpotEnrichments = useServerFn(getSpotEnrichments);
 
   const statsQuery = useQuery({
     queryKey: ["home-stats"],
