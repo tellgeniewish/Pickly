@@ -101,3 +101,56 @@ ${params.topPhotos.map((p) => `- ${p.rank}위 (추천율 ${Math.round(p.likeRate
     top_analysis: Array.isArray(parsed.top_analysis) ? parsed.top_analysis : [],
   };
 }
+
+/**
+ * Generates up to 3 hashtag keywords for a popular photo spot from its place
+ * name + the top photos (with recommendation rate) taken there.
+ */
+export async function generateSpotKeywords(params: {
+  placeName: string;
+  photos: Array<{ imageUrl: string; likeRate: number }>;
+}): Promise<string[]> {
+  const apiKey = process.env.LOVABLE_API_KEY;
+  if (!apiKey) return [];
+
+  const content: Array<Record<string, unknown>> = [
+    {
+      type: "text",
+      text: `장소명: ${params.placeName}
+이 장소에서 찍힌 인기 사진들의 추천율: ${params.photos.map((p) => `${Math.round(p.likeRate * 100)}%`).join(", ")}
+사진들을 보고 이 장소를 표현하는 한국어 키워드 3개를 만들어주세요. (예: 자연광, 데이트, 감성)`,
+    },
+  ];
+  for (const p of params.photos) content.push({ type: "image_url", image_url: { url: p.imageUrl } });
+
+  try {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Lovable-API-Key": apiKey,
+        "X-Lovable-AIG-SDK": "raw-fetch",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          {
+            role: "system",
+            content:
+              '반드시 {"keywords": string[]} 형식의 JSON만 반환하세요. keywords는 정확히 3개, 각 6자 이내의 한국어 단어이며 # 기호는 붙이지 마세요.',
+          },
+          { role: "user", content },
+        ],
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!res.ok) return [];
+    const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const parsed = JSON.parse(json.choices?.[0]?.message?.content ?? "{}") as { keywords?: string[] };
+    return Array.isArray(parsed.keywords)
+      ? parsed.keywords.map((k) => String(k).replace(/^#/, "").trim()).filter(Boolean).slice(0, 3)
+      : [];
+  } catch {
+    return [];
+  }
+}
