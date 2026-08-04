@@ -95,22 +95,20 @@ function Home() {
         ) : (
         <div className="space-y-3">
           {spots.map((spot, i) => {
-            const enrichment = spotEnrichmentQuery.data?.find((e) => e.name === spot.name);
-            // Map API image only; NEVER show user-uploaded photos here.
-            const imageSrc = enrichment?.imageDataUrl ?? null;
-            const keywords = enrichment?.keywords ?? [];
+            const imageSrc = spot.imageUrl ?? null;
+            const keywords = spot.keywords ?? [];
             return (
               <div key={spot.name} className="surface-card overflow-hidden">
                 <div className="relative aspect-[16/9] bg-muted">
                   {imageSrc ? (
                     <img
                       src={imageSrc}
-                      alt={`${spot.name} 지도`}
+                      alt={`${spot.name} 대표 사진`}
                       loading="lazy"
                       className="absolute inset-0 size-full object-cover"
                     />
                   ) : (
-                    <div className="absolute inset-0 bg-gradient-brand-soft flex items-center justify-center text-4xl">🗺️</div>
+                    <div className="absolute inset-0 bg-gradient-brand-soft flex items-center justify-center text-4xl">📍</div>
                   )}
                   <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-full bg-background/70 backdrop-blur text-[11px] font-semibold">
                     🏆 {i + 1}위
@@ -119,7 +117,7 @@ function Home() {
                 <div className="p-3.5">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-semibold truncate">{spot.name}</p>
-                    <p className="text-xs text-primary font-bold shrink-0">❤️ {spot.likes}</p>
+                    <p className="text-xs text-primary font-bold shrink-0">추천율 {spot.recommend}%</p>
                   </div>
                   <div className="mt-2 flex gap-1.5 flex-wrap">
                     {keywords.slice(0, 3).map((t) => (
@@ -133,6 +131,7 @@ function Home() {
             );
           })}
         </div>
+
         )}
 
       </section>
