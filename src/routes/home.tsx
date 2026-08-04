@@ -33,13 +33,7 @@ function Home() {
   });
 
   const spots = topSpotsQuery.data ?? [];
-  const spotNames = spots.map((s) => s.name);
-  const spotEnrichmentQuery = useQuery({
-    queryKey: ["spot-enrichments", ...spotNames],
-    queryFn: () => fetchSpotEnrichments({ data: { names: spotNames } }),
-    enabled: spotNames.length > 0,
-    staleTime: 60 * 60 * 1000,
-  });
+
   const myVotesQuery = useQuery({
     queryKey: ["my-votes", user?.id ?? "guest"],
     queryFn: () => fetchMyVotes(),
