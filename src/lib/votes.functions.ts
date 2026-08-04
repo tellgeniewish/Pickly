@@ -9,8 +9,18 @@ const SIGNED_URL_TTL = 60 * 60 * 24; // 24h
 // Client sends the paths after uploading via the authenticated supabase client.
 export const createVote = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
-    z
+  .inputValidator((input: unknown) => {
+    // Tolerate older/cached clients that sent the photo list under a different
+    // key or as plain storage-path strings.
+    const raw = (input ?? {}) as Record<string, unknown>;
+    const rawPhotos = raw["photos"] ?? raw["photoPaths"] ?? raw["paths"] ?? raw["photoList"];
+    const normalized = {
+      ...raw,
+      photos: Array.isArray(rawPhotos)
+        ? rawPhotos.map((p) => (typeof p === "string" ? { path: p } : p))
+        : rawPhotos,
+    };
+    return z
       .object({
         title: z.string().min(1).max(200),
         locationName: z.string().max(120).nullable().optional(),
@@ -24,11 +34,11 @@ export const createVote = createServerFn({ method: "POST" })
               lng: z.number().nullable().optional(),
             }),
           )
-          .min(2)
+          .min(2, { message: "사진을 2장 이상 올려주세요." })
           .max(10),
       })
-      .parse(input),
-  )
+      .parse(normalized);
+  })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const useLocation = data.useLocation !== false;
