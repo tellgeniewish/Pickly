@@ -401,77 +401,111 @@ export const getHomeStats = createServerFn({ method: "GET" }).handler(async () =
 });
 
 // ---------- getTopSpots (public) ----------
-// Ranks real user vote locations by total likes received. Top 3 only.
-// Only votes that opted into location usage have a location_name, so opting out
-// keeps a vote out of this ranking entirely.
+// Spots are 50m clusters of the EXIF coordinates of real user photos.
+// Ranking = average recommendation rate of the photos taken there.
+// Place name: Kakao Local (coord2regioncode / nearby POI).
+// Representative photo: the highest-rated photo of that spot.
+// Keywords: Gemini, from the place name + top photos + their rates.
+// Votes that opted out of location usage are excluded entirely.
 export const getTopSpots = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-  const { data: allVotes } = await supabaseAdmin
-    .from("votes")
-    .select("id, location_name, use_location");
-  if (!allVotes || allVotes.length === 0)
-    return [] as { name: string; likes: number; recommend: number }[];
+  type Spot = {
+    name: string;
+    likes: number;
+    recommend: number;
+    imageUrl: string | null;
+    keywords: string[];
+  };
 
-  const eligible = allVotes.filter((v) => v.use_location !== false);
-  const voteIds = eligible.map((v) => v.id);
-  if (voteIds.length === 0) return [];
+  const { data: allVotes } = await supabaseAdmin.from("votes").select("id, use_location");
+  const eligible = (allVotes ?? []).filter((v) => v.use_location !== false);
+  if (eligible.length === 0) return [] as Spot[];
 
   const { data: photos } = await supabaseAdmin
     .from("vote_photos")
-    .select("id, vote_id, lat, lng")
-    .in("vote_id", voteIds);
-  const photoIds = (photos ?? []).map((p) => p.id);
-  if (photoIds.length === 0) return [];
+    .select("id, storage_path, lat, lng")
+    .in("vote_id", eligible.map((v) => v.id));
+  const gpsPhotos = (photos ?? []).filter(
+    (p): p is typeof p & { lat: number; lng: number } => p.lat != null && p.lng != null,
+  );
+  if (gpsPhotos.length === 0) return [] as Spot[];
 
   const { data: choices } = await supabaseAdmin
     .from("vote_choices")
     .select("photo_id, liked")
-    .in("photo_id", photoIds);
+    .in("photo_id", gpsPhotos.map((p) => p.id));
 
-  // Rank the locations of the actual photos, not one location copied onto the
-  // whole vote. Photos within 50m are one spot, matching the create screen.
-  const gpsPhotos = (photos ?? []).filter(
-    (p): p is typeof p & { lat: number; lng: number } => p.lat != null && p.lng != null,
-  );
-  if (gpsPhotos.length === 0) return [];
-  const choiceCounts = new Map<string, { likes: number; total: number }>();
-  for (const choice of choices ?? []) {
-    const count = choiceCounts.get(choice.photo_id) ?? { likes: 0, total: 0 };
-    count.total += 1;
-    if (choice.liked) count.likes += 1;
-    choiceCounts.set(choice.photo_id, count);
+  const counts = new Map<string, { likes: number; total: number }>();
+  for (const c of choices ?? []) {
+    const t = counts.get(c.photo_id) ?? { likes: 0, total: 0 };
+    t.total += 1;
+    if (c.liked) t.likes += 1;
+    counts.set(c.photo_id, t);
   }
 
   const { haversineMeters } = await import("./geo");
-  const clusters: Array<{ lat: number; lng: number; count: number; likes: number; total: number }> = [];
+  type Cluster = {
+    lat: number;
+    lng: number;
+    n: number;
+    likes: number;
+    photos: Array<{ storage_path: string; rate: number }>;
+  };
+  const clusters: Cluster[] = [];
   for (const photo of gpsPhotos) {
-    const counts = choiceCounts.get(photo.id);
-    if (!counts) continue;
-    const cluster = clusters.find(
-      (item) => haversineMeters({ lat: item.lat, lng: item.lng }, photo) <= 50,
-    );
-    if (cluster) {
-      cluster.count += 1;
-      cluster.lat += (photo.lat - cluster.lat) / cluster.count;
-      cluster.lng += (photo.lng - cluster.lng) / cluster.count;
-      cluster.likes += counts.likes;
-      cluster.total += counts.total;
+    const t = counts.get(photo.id);
+    if (!t || t.total === 0) continue;
+    const rate = t.likes / t.total;
+    const hit = clusters.find((c) => haversineMeters({ lat: c.lat, lng: c.lng }, photo) <= 50);
+    const entry = { storage_path: photo.storage_path, rate };
+    if (hit) {
+      hit.n += 1;
+      hit.lat += (photo.lat - hit.lat) / hit.n;
+      hit.lng += (photo.lng - hit.lng) / hit.n;
+      hit.likes += t.likes;
+      hit.photos.push(entry);
     } else {
-      clusters.push({ lat: photo.lat, lng: photo.lng, count: 1, ...counts });
+      clusters.push({ lat: photo.lat, lng: photo.lng, n: 1, likes: t.likes, photos: [entry] });
     }
   }
 
-  const top = clusters
-    .filter((item) => item.likes > 0)
-    .sort((a, b) => b.likes - a.likes || b.likes / b.total - a.likes / a.total)
+  const scored = clusters
+    .map((c) => ({
+      ...c,
+      photos: c.photos.slice().sort((a, b) => b.rate - a.rate),
+      recommend: c.photos.reduce((sum, p) => sum + p.rate, 0) / c.photos.length,
+    }))
+    .filter((c) => c.recommend > 0)
+    .sort((a, b) => b.recommend - a.recommend || b.likes - a.likes)
     .slice(0, 3);
+  if (scored.length === 0) return [] as Spot[];
+
   const { resolvePlaceName } = await import("./kakao.server");
+  const { generateSpotKeywords } = await import("./ai-analysis.server");
+
   return Promise.all(
-    top.map(async (item) => ({
-      name: (await resolvePlaceName(item.lat, item.lng)) ?? `${item.lat.toFixed(4)}, ${item.lng.toFixed(4)}`,
-      likes: item.likes,
-      recommend: Math.round((item.likes / item.total) * 100),
-    })),
+    scored.map(async (c): Promise<Spot> => {
+      const name =
+        (await resolvePlaceName(c.lat, c.lng)) ?? `${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`;
+      const topPhotos = c.photos.slice(0, 3);
+      const { data: signed } = await supabaseAdmin.storage
+        .from("vote-photos")
+        .createSignedUrls(topPhotos.map((p) => p.storage_path), SIGNED_URL_TTL);
+      const urls = (signed ?? []).map((s) => s.signedUrl);
+      const keywords = urls.length
+        ? await generateSpotKeywords({
+            placeName: name,
+            photos: topPhotos.map((p, i) => ({ imageUrl: urls[i] ?? "", likeRate: p.rate })).filter((p) => p.imageUrl),
+          })
+        : [];
+      return {
+        name,
+        likes: c.likes,
+        recommend: Math.round(c.recommend * 100),
+        imageUrl: urls[0] ?? null,
+        keywords,
+      };
+    }),
   );
 });
