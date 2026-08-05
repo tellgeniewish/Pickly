@@ -140,8 +140,7 @@ function VotePage() {
 function SwipeCard({
   url, drag, onDrag, onLike, onSkip,
 }: { url: string; drag: number; onDrag: (v: number) => void; onLike: () => void; onSkip: () => void }) {
-  // 4:3(가로) 또는 3:4(세로) 사진은 카드에 꽉 차게, 그 외 비율만 여백+블러 배경.
-  const [fills, setFills] = useState(false);
+
   const onPointerDown = (e: React.PointerEvent) => {
     const startX = e.clientX;
     const el = e.currentTarget as HTMLElement;
