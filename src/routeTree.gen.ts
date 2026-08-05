@@ -9,22 +9,17 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as MypageRouteImport } from './routes/mypage'
-import { Route as HomeRouteImport } from './routes/home'
-import { Route as CreateRouteImport } from './routes/create'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as VoteIdRouteImport } from './routes/vote.$id'
-import { Route as ShareIdRouteImport } from './routes/share.$id'
+import { Route as CreateRouteImport } from './routes/create'
+import { Route as HomeRouteImport } from './routes/home'
+import { Route as MypageRouteImport } from './routes/mypage'
 import { Route as ResultIdRouteImport } from './routes/result.$id'
+import { Route as ShareIdRouteImport } from './routes/share.$id'
+import { Route as VoteIdRouteImport } from './routes/vote.$id'
 
-const MypageRoute = MypageRouteImport.update({
-  id: '/mypage',
-  path: '/mypage',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HomeRoute = HomeRouteImport.update({
-  id: '/home',
-  path: '/home',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CreateRoute = CreateRouteImport.update({
@@ -32,14 +27,19 @@ const CreateRoute = CreateRouteImport.update({
   path: '/create',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const HomeRoute = HomeRouteImport.update({
+  id: '/home',
+  path: '/home',
   getParentRoute: () => rootRouteImport,
 } as any)
-const VoteIdRoute = VoteIdRouteImport.update({
-  id: '/vote/$id',
-  path: '/vote/$id',
+const MypageRoute = MypageRouteImport.update({
+  id: '/mypage',
+  path: '/mypage',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResultIdRoute = ResultIdRouteImport.update({
+  id: '/result/$id',
+  path: '/result/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ShareIdRoute = ShareIdRouteImport.update({
@@ -47,9 +47,9 @@ const ShareIdRoute = ShareIdRouteImport.update({
   path: '/share/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ResultIdRoute = ResultIdRouteImport.update({
-  id: '/result/$id',
-  path: '/result/$id',
+const VoteIdRoute = VoteIdRouteImport.update({
+  id: '/vote/$id',
+  path: '/vote/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -123,18 +123,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/mypage': {
-      id: '/mypage'
-      path: '/mypage'
-      fullPath: '/mypage'
-      preLoaderRoute: typeof MypageRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/home': {
-      id: '/home'
-      path: '/home'
-      fullPath: '/home'
-      preLoaderRoute: typeof HomeRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/create': {
@@ -144,18 +137,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CreateRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/home': {
+      id: '/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof HomeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/vote/$id': {
-      id: '/vote/$id'
-      path: '/vote/$id'
-      fullPath: '/vote/$id'
-      preLoaderRoute: typeof VoteIdRouteImport
+    '/mypage': {
+      id: '/mypage'
+      path: '/mypage'
+      fullPath: '/mypage'
+      preLoaderRoute: typeof MypageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/result/$id': {
+      id: '/result/$id'
+      path: '/result/$id'
+      fullPath: '/result/$id'
+      preLoaderRoute: typeof ResultIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/share/$id': {
@@ -165,11 +165,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShareIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/result/$id': {
-      id: '/result/$id'
-      path: '/result/$id'
-      fullPath: '/result/$id'
-      preLoaderRoute: typeof ResultIdRouteImport
+    '/vote/$id': {
+      id: '/vote/$id'
+      path: '/vote/$id'
+      fullPath: '/vote/$id'
+      preLoaderRoute: typeof VoteIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -187,3 +187,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
