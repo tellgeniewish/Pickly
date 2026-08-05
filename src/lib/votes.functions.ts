@@ -481,7 +481,7 @@ export const getTopSpots = createServerFn({ method: "GET" }).handler(async () =>
     .slice(0, 3);
   if (scored.length === 0) return [] as Spot[];
 
-  const { resolvePlaceName } = await import("./kakao.server");
+  const { resolvePlaceName, fetchPlacePhoto } = await import("./kakao.server");
   const { generateSpotKeywords } = await import("./ai-analysis.server");
 
   return Promise.all(
@@ -493,6 +493,8 @@ export const getTopSpots = createServerFn({ method: "GET" }).handler(async () =>
         .from("vote-photos")
         .createSignedUrls(topPhotos.map((p) => p.storage_path), SIGNED_URL_TTL);
       const urls = (signed ?? []).map((s) => s.signedUrl);
+      // Keywords may look at the user photos (server-side only), but the image we
+      // expose is a photo OF THE PLACE — user photos are personal data.
       const keywords = urls.length
         ? await generateSpotKeywords({
             placeName: name,
@@ -503,7 +505,7 @@ export const getTopSpots = createServerFn({ method: "GET" }).handler(async () =>
         name,
         likes: c.likes,
         recommend: Math.round(c.recommend * 100),
-        imageUrl: urls[0] ?? null,
+        imageUrl: await fetchPlacePhoto(name),
         keywords,
       };
     }),

@@ -85,35 +85,38 @@ function Home() {
               : "아직 집계된 포토스팟이 없어요. 위치 정보를 켜고 투표를 만들어보세요!"}
           </p>
         ) : (
-        <div className="space-y-3">
+        <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 snap-x snap-mandatory scrollbar-none">
           {spots.map((spot, i) => {
             const imageSrc = spot.imageUrl ?? null;
             const keywords = spot.keywords ?? [];
             return (
-              <div key={spot.name} className="surface-card overflow-hidden">
+              <div
+                key={spot.name}
+                className="surface-card overflow-hidden shrink-0 snap-start w-[62%] max-w-[220px]"
+              >
                 <div className="relative aspect-[16/9] bg-muted">
                   {imageSrc ? (
                     <img
                       src={imageSrc}
-                      alt={`${spot.name} 대표 사진`}
+                      alt={`${spot.name} 장소 사진`}
                       loading="lazy"
                       className="absolute inset-0 size-full object-cover"
                     />
                   ) : (
-                    <div className="absolute inset-0 bg-gradient-brand-soft flex items-center justify-center text-4xl">📍</div>
+                    <div className="absolute inset-0 bg-gradient-brand-soft flex items-center justify-center text-3xl">📍</div>
                   )}
-                  <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-full bg-background/70 backdrop-blur text-[11px] font-semibold">
+                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-background/70 backdrop-blur text-[10px] font-semibold">
                     🏆 {i + 1}위
                   </div>
                 </div>
-                <div className="p-3.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold truncate">{spot.name}</p>
-                    <p className="text-xs text-primary font-bold shrink-0">추천율 {spot.recommend}%</p>
+                <div className="p-2.5">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <p className="text-sm font-semibold truncate">{spot.name}</p>
+                    <p className="text-[11px] text-primary font-bold shrink-0">{spot.recommend}%</p>
                   </div>
-                  <div className="mt-2 flex gap-1.5 flex-wrap">
+                  <div className="mt-1.5 flex gap-1 flex-wrap">
                     {keywords.slice(0, 3).map((t) => (
-                      <span key={t} className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                      <span key={t} className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
                         #{t}
                       </span>
                     ))}
@@ -123,6 +126,7 @@ function Home() {
             );
           })}
         </div>
+
 
         )}
 

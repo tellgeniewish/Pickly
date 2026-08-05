@@ -91,3 +91,22 @@ export async function resolvePlaceName(lat: number, lng: number): Promise<string
   return osmReverseGeocode(lat, lng);
 }
 
+
+/**
+ * Place photo for a spot name. User-uploaded photos are personal data and must
+ * never be shown publicly, so the home ranking uses a photo *of the place*.
+ * Kakao Daum image search works with the same REST key we already have.
+ */
+export async function fetchPlacePhoto(placeName: string): Promise<string | null> {
+  const queries = [`${placeName} 풍경`, placeName];
+  for (const q of queries) {
+    const j = await kakaoFetch(
+      `/v2/search/image?query=${encodeURIComponent(q)}&sort=accuracy&size=10`,
+    );
+    const docs: any[] = j?.documents ?? [];
+    const hit = docs.find((d) => d?.image_url && Number(d.width ?? 0) >= 640) ?? docs[0];
+    const url = hit?.image_url || hit?.thumbnail_url;
+    if (url) return url as string;
+  }
+  return null;
+}
