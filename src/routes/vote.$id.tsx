@@ -140,6 +140,7 @@ function VotePage() {
 function SwipeCard({
   url, drag, onDrag, onLike, onSkip,
 }: { url: string; drag: number; onDrag: (v: number) => void; onLike: () => void; onSkip: () => void }) {
+
   const onPointerDown = (e: React.PointerEvent) => {
     const startX = e.clientX;
     const el = e.currentTarget as HTMLElement;
@@ -162,29 +163,42 @@ function SwipeCard({
   };
   const rot = drag * 12;
   const tx = drag * 80;
+  const [ratio, setRatio] = useState<number | null>(null);
+  const isFourThree = ratio != null && ratio > 1.2 && ratio < 1.5;
+  const isThreeFour = ratio != null && ratio > 0.66 && ratio < 0.84;
+  const cover = isFourThree || isThreeFour;
   return (
     <div
       onPointerDown={onPointerDown}
-      className="relative aspect-[3/4] w-full max-w-[340px] max-h-[58vh] rounded-[24px] overflow-hidden surface-card cursor-grab active:cursor-grabbing select-none touch-none transition-transform"
+      className={`relative w-full max-w-[340px] max-h-[58vh] rounded-[24px] overflow-hidden surface-card cursor-grab active:cursor-grabbing select-none touch-none transition-transform ${
+        isFourThree ? "aspect-[4/3]" : "aspect-[3/4]"
+      }`}
       style={{
         transform: `translateX(${tx}px) rotate(${rot}deg)`,
         transition: drag === 0 ? "transform 0.3s ease" : "none",
       }}
     >
-      {/* Blurred fill keeps the card shape while the real photo is shown uncropped. */}
-      <img
-        src={url}
-        alt=""
-        aria-hidden
-        className="absolute inset-0 size-full object-cover scale-110 blur-2xl opacity-40 pointer-events-none"
-        draggable={false}
-      />
+      {/* Blurred fill keeps the card shape while off-ratio photos are shown uncropped. */}
+      {!cover && (
+        <img
+          src={url}
+          alt=""
+          aria-hidden
+          className="absolute inset-0 size-full object-cover scale-110 blur-2xl opacity-40 pointer-events-none"
+          draggable={false}
+        />
+      )}
       <img
         src={url}
         alt="투표 사진"
-        className="absolute inset-0 size-full object-contain pointer-events-none"
+        onLoad={(e) => {
+          const img = e.currentTarget;
+          if (img.naturalHeight > 0) setRatio(img.naturalWidth / img.naturalHeight);
+        }}
+        className={`absolute inset-0 size-full pointer-events-none ${cover ? "object-cover" : "object-contain"}`}
         draggable={false}
       />
+
       <div className="absolute top-6 right-6 px-3 py-1.5 rounded-lg border-2 border-primary text-primary font-extrabold tracking-wider rotate-12 transition-opacity" style={{ opacity: Math.max(0, drag) }}>
         LIKE
       </div>

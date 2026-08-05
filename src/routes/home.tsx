@@ -85,7 +85,10 @@ function Home() {
               : "아직 집계된 포토스팟이 없어요. 위치 정보를 켜고 투표를 만들어보세요!"}
           </p>
         ) : (
-        <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 snap-x snap-mandatory scrollbar-none">
+        <div
+          className="-mx-1 flex gap-3 overflow-x-auto overflow-y-hidden px-1 pb-1 snap-x snap-mandatory scrollbar-none overscroll-x-contain touch-pan-x"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
           {spots.map((spot, i) => {
             const imageSrc = spot.imageUrl ?? null;
             const keywords = spot.keywords ?? [];
@@ -100,8 +103,10 @@ function Home() {
                       src={imageSrc}
                       alt={`${spot.name} 장소 사진`}
                       loading="lazy"
+                      referrerPolicy="no-referrer"
                       className="absolute inset-0 size-full object-cover"
                     />
+
                   ) : (
                     <div className="absolute inset-0 bg-gradient-brand-soft flex items-center justify-center text-3xl">📍</div>
                   )}
