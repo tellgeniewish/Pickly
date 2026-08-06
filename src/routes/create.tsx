@@ -28,20 +28,76 @@ interface LocationGroup extends GeoCluster {
   resolving: boolean;
 }
 
+interface PlaceHit {
+  placeName: string;
+  addressName: string | null;
+  lat: number;
+  lng: number;
+}
+
 function Create() {
   const navigate = useNavigate();
   const { user, loading } = useSession();
   const create = useServerFn(createVote);
   const reverse = useServerFn(reverseGeocode);
+  const searchPlace = useServerFn(searchPlaces);
   const [title, setTitle] = useState("");
   const [deadlineDays, setDeadlineDays] = useState<number>(3);
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [locationGroups, setLocationGroups] = useState<LocationGroup[]>([]);
   const [useLocationForRanking, setUseLocationForRanking] = useState(true);
-  
+
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editMode, setEditMode] = useState<"menu" | "photos" | "place">("menu");
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placeResults, setPlaceResults] = useState<PlaceHit[]>([]);
+  const [placeSearching, setPlaceSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const openEditor = (idx: number) => {
+    if (editingIdx === idx) {
+      setEditingIdx(null);
+      return;
+    }
+    setEditingIdx(idx);
+    setEditMode("menu");
+    setPlaceQuery("");
+    setPlaceResults([]);
+  };
+
+  const runPlaceSearch = async (idx: number) => {
+    const q = placeQuery.trim();
+    if (!q) return;
+    setPlaceSearching(true);
+    try {
+      const g = locationGroups[idx];
+      const res = await searchPlace({
+        data: { query: q, lat: g?.centerLat, lng: g?.centerLng },
+      });
+      setPlaceResults(res.places ?? []);
+      if ((res.places ?? []).length === 0) toast.error("검색 결과가 없어요.");
+    } catch {
+      toast.error("장소 검색에 실패했어요.");
+    } finally {
+      setPlaceSearching(false);
+    }
+  };
+
+  const applyPlace = (idx: number, place: PlaceHit) => {
+    setLocationGroups((prev) =>
+      prev.map((g, i) =>
+        i === idx
+          ? { ...g, name: place.placeName, centerLat: place.lat, centerLng: place.lng, resolving: false }
+          : g,
+      ),
+    );
+    setEditingIdx(null);
+    setEditMode("menu");
+    setPlaceQuery("");
+    setPlaceResults([]);
+    toast.success(`위치를 '${place.placeName}'(으)로 변경했어요.`);
+  };
 
   useEffect(() => {
     return () => photos.forEach((p) => URL.revokeObjectURL(p.preview));
