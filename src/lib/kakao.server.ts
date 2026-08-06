@@ -110,3 +110,73 @@ export async function fetchPlacePhoto(placeName: string): Promise<string | null>
   }
   return null;
 }
+
+export type KakaoLocalError = "no_key" | "service_disabled" | "request_failed" | null;
+
+export interface PlaceHit {
+  placeName: string;
+  addressName: string | null;
+  lat: number;
+  lng: number;
+}
+
+/**
+ * Keyword place search (카카오 Local - 키워드로 장소 검색).
+ * POI search, not address search: "아임파이" → "아임파이 외대본점".
+ * Tries a location-biased search first, then a nationwide search so that a
+ * cafe far from the EXIF coordinate is still findable.
+ */
+export async function searchPlacesByKeyword(
+  query: string,
+  lat?: number,
+  lng?: number,
+): Promise<{ places: PlaceHit[]; error: KakaoLocalError }> {
+  const key = getKey();
+  if (!key) return { places: [], error: "no_key" };
+
+  const attempts: URLSearchParams[] = [];
+  if (lat != null && lng != null) {
+    attempts.push(
+      new URLSearchParams({
+        query,
+        size: "10",
+        x: String(lng),
+        y: String(lat),
+        radius: "20000",
+        sort: "distance",
+      }),
+    );
+  }
+  attempts.push(new URLSearchParams({ query, size: "10" }));
+
+  let error: KakaoLocalError = null;
+  for (const params of attempts) {
+    const res = await fetch(`${KAKAO_BASE}/v2/local/search/keyword.json?${params.toString()}`, {
+      headers: { Authorization: `KakaoAK ${key}` },
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      error = res.status === 401 || res.status === 403
+        ? body.includes("OPEN_MAP_AND_LOCAL")
+          ? "service_disabled"
+          : "request_failed"
+        : "request_failed";
+      continue;
+    }
+    const j = (await res.json()) as { documents?: any[] };
+    const docs = j.documents ?? [];
+    if (docs.length > 0) {
+      return {
+        places: docs.map((d) => ({
+          placeName: String(d.place_name ?? ""),
+          addressName: (d.road_address_name || d.address_name || null) as string | null,
+          lat: Number(d.y),
+          lng: Number(d.x),
+        })),
+        error: null,
+      };
+    }
+    error = null;
+  }
+  return { places: [], error };
+}
