@@ -36,6 +36,38 @@ export const reverseGeocode = createServerFn({ method: "POST" })
     return { name: await resolvePlaceName(data.lat, data.lng) };
   });
 
+// Keyword place search (카카오 로컬 - 키워드로 장소 검색).
+// Used by the "위치 변경" flow on the create screen.
+export const searchPlaces = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        query: z.string().min(1).max(60),
+        lat: z.number().optional(),
+        lng: z.number().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const params = new URLSearchParams({ query: data.query, size: "10" });
+    if (data.lat != null && data.lng != null) {
+      params.set("x", String(data.lng));
+      params.set("y", String(data.lat));
+      params.set("radius", "20000");
+      params.set("sort", "distance");
+    }
+    const j = await kakaoFetch(`/v2/local/search/keyword.json?${params.toString()}`);
+    const docs: any[] = j?.documents ?? [];
+    return {
+      places: docs.map((d) => ({
+        placeName: String(d.place_name ?? ""),
+        addressName: (d.road_address_name || d.address_name || null) as string | null,
+        lat: Number(d.y),
+        lng: Number(d.x),
+      })),
+    };
+  });
+
 
 // Given a place query, return keywords + a representative image (Kakao static map).
 // We deliberately DO NOT return user-generated photos — only a Kakao static map for the place location.
