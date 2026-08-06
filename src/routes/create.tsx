@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Camera, CheckCircle2, LogIn, MapPin, RefreshCw, X } from "lucide-react";
+import { Camera, CheckCircle2, Images, LogIn, MapPin, RefreshCw, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -7,7 +7,7 @@ import exifr from "exifr";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { createVote } from "@/lib/votes.functions";
-import { reverseGeocode } from "@/lib/kakao.functions";
+import { reverseGeocode, searchPlaces } from "@/lib/kakao.functions";
 import { clusterByDistance, type GeoCluster } from "@/lib/geo";
 
 export const Route = createFileRoute("/create")({
