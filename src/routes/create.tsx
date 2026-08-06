@@ -76,13 +76,24 @@ function Create() {
         data: { query: q, lat: g?.centerLat, lng: g?.centerLng },
       });
       setPlaceResults(res.places ?? []);
-      if ((res.places ?? []).length === 0) toast.error("검색 결과가 없어요.");
+      if ((res.places ?? []).length === 0) {
+        if (res.error === "service_disabled") {
+          toast.error("지도 장소 검색이 아직 활성화되지 않았어요. (카카오 앱의 카카오맵 서비스 ON 필요)");
+        } else if (res.error === "no_key") {
+          toast.error("지도 API 키가 설정되지 않았어요.");
+        } else if (res.error === "request_failed") {
+          toast.error("장소 검색 요청이 실패했어요. 잠시 후 다시 시도해 주세요.");
+        } else {
+          toast.error(`'${q}' 검색 결과가 없어요.`);
+        }
+      }
     } catch {
       toast.error("장소 검색에 실패했어요.");
     } finally {
       setPlaceSearching(false);
     }
   };
+
 
   const applyPlace = (idx: number, place: PlaceHit) => {
     setLocationGroups((prev) =>

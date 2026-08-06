@@ -49,24 +49,10 @@ export const searchPlaces = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data }) => {
-    const params = new URLSearchParams({ query: data.query, size: "10" });
-    if (data.lat != null && data.lng != null) {
-      params.set("x", String(data.lng));
-      params.set("y", String(data.lat));
-      params.set("radius", "20000");
-      params.set("sort", "distance");
-    }
-    const j = await kakaoFetch(`/v2/local/search/keyword.json?${params.toString()}`);
-    const docs: any[] = j?.documents ?? [];
-    return {
-      places: docs.map((d) => ({
-        placeName: String(d.place_name ?? ""),
-        addressName: (d.road_address_name || d.address_name || null) as string | null,
-        lat: Number(d.y),
-        lng: Number(d.x),
-      })),
-    };
+    const { searchPlacesByKeyword } = await import("./kakao.server");
+    return searchPlacesByKeyword(data.query.trim(), data.lat, data.lng);
   });
+
 
 
 // Given a place query, return keywords + a representative image (Kakao static map).
