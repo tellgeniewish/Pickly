@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Camera, CheckCircle2, LogIn, MapPin, RefreshCw, X } from "lucide-react";
+import { Camera, CheckCircle2, Images, LogIn, MapPin, RefreshCw, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -7,7 +7,7 @@ import exifr from "exifr";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { createVote } from "@/lib/votes.functions";
-import { reverseGeocode } from "@/lib/kakao.functions";
+import { reverseGeocode, searchPlaces } from "@/lib/kakao.functions";
 import { clusterByDistance, type GeoCluster } from "@/lib/geo";
 
 export const Route = createFileRoute("/create")({
@@ -28,20 +28,76 @@ interface LocationGroup extends GeoCluster {
   resolving: boolean;
 }
 
+interface PlaceHit {
+  placeName: string;
+  addressName: string | null;
+  lat: number;
+  lng: number;
+}
+
 function Create() {
   const navigate = useNavigate();
   const { user, loading } = useSession();
   const create = useServerFn(createVote);
   const reverse = useServerFn(reverseGeocode);
+  const searchPlace = useServerFn(searchPlaces);
   const [title, setTitle] = useState("");
   const [deadlineDays, setDeadlineDays] = useState<number>(3);
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [locationGroups, setLocationGroups] = useState<LocationGroup[]>([]);
   const [useLocationForRanking, setUseLocationForRanking] = useState(true);
-  
+
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editMode, setEditMode] = useState<"menu" | "photos" | "place">("menu");
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placeResults, setPlaceResults] = useState<PlaceHit[]>([]);
+  const [placeSearching, setPlaceSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const openEditor = (idx: number) => {
+    if (editingIdx === idx) {
+      setEditingIdx(null);
+      return;
+    }
+    setEditingIdx(idx);
+    setEditMode("menu");
+    setPlaceQuery("");
+    setPlaceResults([]);
+  };
+
+  const runPlaceSearch = async (idx: number) => {
+    const q = placeQuery.trim();
+    if (!q) return;
+    setPlaceSearching(true);
+    try {
+      const g = locationGroups[idx];
+      const res = await searchPlace({
+        data: { query: q, lat: g?.centerLat, lng: g?.centerLng },
+      });
+      setPlaceResults(res.places ?? []);
+      if ((res.places ?? []).length === 0) toast.error("검색 결과가 없어요.");
+    } catch {
+      toast.error("장소 검색에 실패했어요.");
+    } finally {
+      setPlaceSearching(false);
+    }
+  };
+
+  const applyPlace = (idx: number, place: PlaceHit) => {
+    setLocationGroups((prev) =>
+      prev.map((g, i) =>
+        i === idx
+          ? { ...g, name: place.placeName, centerLat: place.lat, centerLng: place.lng, resolving: false }
+          : g,
+      ),
+    );
+    setEditingIdx(null);
+    setEditMode("menu");
+    setPlaceQuery("");
+    setPlaceResults([]);
+    toast.success(`위치를 '${place.placeName}'(으)로 변경했어요.`);
+  };
 
   useEffect(() => {
     return () => photos.forEach((p) => URL.revokeObjectURL(p.preview));
@@ -343,7 +399,7 @@ function Create() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setEditingIdx(isEditing ? null : idx);
+                              openEditor(idx);
                             }}
                             className={`flex items-center gap-1 text-xs transition-colors shrink-0 ${
                               isEditing ? "text-primary" : "text-muted-foreground hover:text-primary"
@@ -354,29 +410,108 @@ function Create() {
                           </button>
                         </div>
                         {isEditing && (
-                          <div className="ml-6 rounded-xl bg-background/40 border border-border/60 p-2.5">
-                            <p className="text-[11px] text-muted-foreground mb-2">
-                              이 위치에 속하는 사진 번호를 눌러서 골라주세요.
-                            </p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {geoIndices.map((n) => {
-                                const on = g.photoIndices.includes(n);
-                                return (
-                                  <button
-                                    key={n}
-                                    type="button"
-                                    onClick={() => toggleAssign(idx, n)}
-                                    className={`size-8 rounded-full text-xs font-bold border transition-colors ${
-                                      on
-                                        ? "bg-primary text-background border-primary"
-                                        : "border-border text-muted-foreground hover:border-primary hover:text-primary"
-                                    }`}
-                                  >
-                                    {n}
-                                  </button>
-                                );
-                              })}
+                          <div className="ml-6 rounded-xl bg-background/40 border border-border/60 p-2.5 space-y-2.5">
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setEditMode("photos")}
+                                className={`flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-medium transition-colors ${
+                                  editMode === "photos"
+                                    ? "bg-primary text-background border-primary"
+                                    : "border-border text-muted-foreground hover:border-primary hover:text-primary"
+                                }`}
+                              >
+                                <Images className="size-3.5" /> 사진 선택 변경
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditMode("place")}
+                                className={`flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-medium transition-colors ${
+                                  editMode === "place"
+                                    ? "bg-primary text-background border-primary"
+                                    : "border-border text-muted-foreground hover:border-primary hover:text-primary"
+                                }`}
+                              >
+                                <Search className="size-3.5" /> 위치 변경
+                              </button>
                             </div>
+
+                            {editMode === "photos" && (
+                              <div>
+                                <p className="text-[11px] text-muted-foreground mb-2">
+                                  이 위치에 속하는 사진 번호를 눌러서 골라주세요.
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {geoIndices.map((n) => {
+                                    const on = g.photoIndices.includes(n);
+                                    return (
+                                      <button
+                                        key={n}
+                                        type="button"
+                                        onClick={() => toggleAssign(idx, n)}
+                                        className={`size-8 rounded-full text-xs font-bold border transition-colors ${
+                                          on
+                                            ? "bg-primary text-background border-primary"
+                                            : "border-border text-muted-foreground hover:border-primary hover:text-primary"
+                                        }`}
+                                      >
+                                        {n}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {editMode === "place" && (
+                              <div>
+                                <p className="text-[11px] text-muted-foreground mb-2">
+                                  장소를 검색해서 위치명을 바꿀 수 있어요.
+                                </p>
+                                <div className="flex gap-1.5">
+                                  <input
+                                    value={placeQuery}
+                                    onChange={(e) => setPlaceQuery(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        void runPlaceSearch(idx);
+                                      }
+                                    }}
+                                    placeholder="예: 성수, 서울숲"
+                                    className="flex-1 min-w-0 rounded-lg bg-muted border border-border px-3 py-2 text-xs outline-none focus:border-primary"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => void runPlaceSearch(idx)}
+                                    disabled={placeSearching || !placeQuery.trim()}
+                                    className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-background disabled:opacity-40"
+                                  >
+                                    {placeSearching ? "검색 중" : "검색"}
+                                  </button>
+                                </div>
+                                {placeResults.length > 0 && (
+                                  <ul className="mt-2 max-h-52 overflow-y-auto divide-y divide-border/60 rounded-lg border border-border/60">
+                                    {placeResults.map((p, i) => (
+                                      <li key={`${p.placeName}-${i}`}>
+                                        <button
+                                          type="button"
+                                          onClick={() => applyPlace(idx, p)}
+                                          className="w-full text-left px-3 py-2 hover:bg-muted/60 transition-colors"
+                                        >
+                                          <p className="text-xs font-medium truncate">{p.placeName}</p>
+                                          {p.addressName && (
+                                            <p className="text-[10px] text-muted-foreground truncate">
+                                              {p.addressName}
+                                            </p>
+                                          )}
+                                        </button>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
