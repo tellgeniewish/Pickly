@@ -1,9 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, Flame, ImagePlus, LogIn, Users, Vote } from "lucide-react";
+import { ChevronDown, ChevronRight, Flame, ImagePlus, LogIn, Users, Vote } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getHomeStats, getTopSpots, listMyVotes } from "@/lib/votes.functions";
 import { useSession } from "@/hooks/use-session";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 export const Route = createFileRoute("/home")({
   head: () => ({ meta: [{ title: "Pickly — 홈" }] }),
@@ -155,18 +160,48 @@ function Home() {
       )}
 
       {user && (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground">
-            내 진행중인 투표 ({myVotesQuery.data?.active.length ?? 0})
-          </h2>
-          <div className="space-y-2">
-            {(myVotesQuery.data?.active ?? []).map((v) => <VoteRow key={v.id} vote={v} />)}
-            {myVotesQuery.data?.active.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                진행중인 투표가 없어요. 새 투표를 만들어보세요!
-              </p>
-            )}
-          </div>
+        <section className="space-y-4">
+          <Collapsible defaultOpen={false}>
+            <CollapsibleTrigger asChild>
+              <button className="w-full flex items-center justify-between text-left">
+                <h2 className="text-sm font-semibold text-muted-foreground">
+                  진행 중인 투표 ({myVotesQuery.data?.active.length ?? 0})
+                </h2>
+                <ChevronDown className="size-4 text-muted-foreground shrink-0 transition-transform data-[state=open]:rotate-180" />
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="space-y-2 mt-2">
+                {(myVotesQuery.data?.active ?? []).map((v) => <VoteRow key={v.id} vote={v} />)}
+                {myVotesQuery.data?.active.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    진행 중인 투표가 없어요. 새 투표를 만들어보세요!
+                  </p>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
+          <Collapsible defaultOpen={false}>
+            <CollapsibleTrigger asChild>
+              <button className="w-full flex items-center justify-between text-left">
+                <h2 className="text-sm font-semibold text-muted-foreground">
+                  종료된 투표 ({myVotesQuery.data?.ended.length ?? 0})
+                </h2>
+                <ChevronDown className="size-4 text-muted-foreground shrink-0 transition-transform data-[state=open]:rotate-180" />
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="space-y-2 mt-2">
+                {(myVotesQuery.data?.ended ?? []).map((v) => <VoteRow key={v.id} vote={v} />)}
+                {myVotesQuery.data?.ended.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    종료된 투표가 없어요.
+                  </p>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </section>
       )}
     </main>

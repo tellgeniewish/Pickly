@@ -1,11 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ChevronRight, LogIn, LogOut } from "lucide-react";
+import { ChevronDown, ChevronRight, LogIn, LogOut } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { listMyVotes } from "@/lib/votes.functions";
 import { toast } from "sonner";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 export const Route = createFileRoute("/mypage")({
   head: () => ({ meta: [{ title: "Pickly — 마이페이지" }] }),
@@ -80,7 +85,7 @@ function MyPage() {
       </section>
 
       <section className="space-y-4">
-        <List title={`진행중인 투표 (${active.length})`} items={active} />
+        <List title={`진행 중인 투표 (${active.length})`} items={active} />
         <List title={`종료된 투표 (${ended.length})`} items={ended} />
       </section>
 
@@ -110,36 +115,50 @@ function List({
 }: { title: string; items: Array<{ id: string; title: string; participants: number; closesAt: string }> }) {
   if (items.length === 0) {
     return (
-      <div>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-2">{title}</h2>
-        <p className="text-sm text-muted-foreground text-center py-4">없어요.</p>
-      </div>
+      <Collapsible defaultOpen={false}>
+        <CollapsibleTrigger asChild>
+          <button className="w-full flex items-center justify-between text-left">
+            <h2 className="text-sm font-semibold text-muted-foreground">{title}</h2>
+            <ChevronDown className="size-4 text-muted-foreground shrink-0 transition-transform data-[state=open]:rotate-180" />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <p className="text-sm text-muted-foreground text-center py-4">없어요.</p>
+        </CollapsibleContent>
+      </Collapsible>
     );
   }
   return (
-    <div>
-      <h2 className="text-sm font-semibold text-muted-foreground mb-2">{title}</h2>
-      <div className="space-y-2">
-        {items.map((v) => {
-          const remaining = Math.max(0, Math.ceil((new Date(v.closesAt).getTime() - Date.now()) / (1000 * 3600 * 24)));
-          return (
-            <Link
-              key={v.id}
-              to="/result/$id"
-              params={{ id: v.id }}
-              className="surface-card px-4 py-3.5 flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
-            >
-              <div className="min-w-0">
-                <p className="font-medium truncate">{v.title}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  참여 {v.participants}명 · {remaining > 0 ? `D-${remaining}` : "종료"}
-                </p>
-              </div>
-              <ChevronRight className="size-4 text-muted-foreground shrink-0" />
-            </Link>
-          );
-        })}
-      </div>
-    </div>
+    <Collapsible defaultOpen={false}>
+      <CollapsibleTrigger asChild>
+        <button className="w-full flex items-center justify-between text-left mb-2">
+          <h2 className="text-sm font-semibold text-muted-foreground">{title}</h2>
+          <ChevronDown className="size-4 text-muted-foreground shrink-0 transition-transform data-[state=open]:rotate-180" />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="space-y-2">
+          {items.map((v) => {
+            const remaining = Math.max(0, Math.ceil((new Date(v.closesAt).getTime() - Date.now()) / (1000 * 3600 * 24)));
+            return (
+              <Link
+                key={v.id}
+                to="/result/$id"
+                params={{ id: v.id }}
+                className="surface-card px-4 py-3.5 flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{v.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    참여 {v.participants}명 · {remaining > 0 ? `D-${remaining}` : "종료"}
+                  </p>
+                </div>
+                <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+              </Link>
+            );
+          })}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
