@@ -85,7 +85,7 @@ function MyPage() {
       </section>
 
       <section className="space-y-4">
-        <List title={`진행중인 투표 (${active.length})`} items={active} />
+        <List title={`진행 중인 투표 (${active.length})`} items={active} />
         <List title={`종료된 투표 (${ended.length})`} items={ended} />
       </section>
 
