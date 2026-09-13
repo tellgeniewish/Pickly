@@ -1,9 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, Flame, ImagePlus, LogIn, Users, Vote } from "lucide-react";
+import { ChevronDown, ChevronRight, Flame, ImagePlus, LogIn, Users, Vote } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getHomeStats, getTopSpots, listMyVotes } from "@/lib/votes.functions";
 import { useSession } from "@/hooks/use-session";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 export const Route = createFileRoute("/home")({
   head: () => ({ meta: [{ title: "Pickly — 홈" }] }),
