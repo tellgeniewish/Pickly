@@ -97,10 +97,20 @@ function Home() {
           {spots.map((spot, i) => {
             const imageSrc = spot.imageUrl ?? null;
             const keywords = spot.keywords ?? [];
+            const medal = ["🥇", "🥈", "🥉"][i] ?? "🏅";
             return (
-              <div
+              <Link
                 key={spot.name}
-                className="surface-card overflow-hidden shrink-0 snap-start w-[62%] max-w-[220px]"
+                to="/spot"
+                search={{
+                  name: spot.name,
+                  lat: spot.lat,
+                  lng: spot.lng,
+                  rank: i + 1,
+                  rate: spot.recommend,
+                  kw: keywords.slice(0, 3).join(","),
+                }}
+                className="surface-card overflow-hidden shrink-0 snap-start w-[62%] max-w-[220px] block active:scale-[0.98] transition-transform"
               >
                 <div className="relative aspect-[16/9] bg-muted">
                   {imageSrc ? (
