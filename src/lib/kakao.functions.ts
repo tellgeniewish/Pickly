@@ -179,3 +179,9 @@ export const getSpotPlaceDetail = createServerFn({ method: "POST" })
       fallbackQueryUrl: `https://map.kakao.com/?q=${encodeURIComponent(data.name)}`,
     };
   });
+
+// Kakao Maps JavaScript key (JS 앱 키). Kept in server env and handed to the
+// client only when needed — never hardcoded in the bundle.
+export const getKakaoMapJsKey = createServerFn({ method: "GET" }).handler(async () => {
+  return { key: process.env["KAKAO_JS_APP_KEY"] || null };
+});
