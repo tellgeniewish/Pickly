@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CreateRouteImport } from './routes/create'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as MypageRouteImport } from './routes/mypage'
+import { Route as SpotRouteImport } from './routes/spot'
 import { Route as ResultIdRouteImport } from './routes/result.$id'
 import { Route as ShareIdRouteImport } from './routes/share.$id'
 import { Route as VoteIdRouteImport } from './routes/vote.$id'
@@ -37,6 +38,11 @@ const MypageRoute = MypageRouteImport.update({
   path: '/mypage',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SpotRoute = SpotRouteImport.update({
+  id: '/spot',
+  path: '/spot',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResultIdRoute = ResultIdRouteImport.update({
   id: '/result/$id',
   path: '/result/$id',
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/create': typeof CreateRoute
   '/home': typeof HomeRoute
   '/mypage': typeof MypageRoute
+  '/spot': typeof SpotRoute
   '/result/$id': typeof ResultIdRoute
   '/share/$id': typeof ShareIdRoute
   '/vote/$id': typeof VoteIdRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/create': typeof CreateRoute
   '/home': typeof HomeRoute
   '/mypage': typeof MypageRoute
+  '/spot': typeof SpotRoute
   '/result/$id': typeof ResultIdRoute
   '/share/$id': typeof ShareIdRoute
   '/vote/$id': typeof VoteIdRoute
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/create': typeof CreateRoute
   '/home': typeof HomeRoute
   '/mypage': typeof MypageRoute
+  '/spot': typeof SpotRoute
   '/result/$id': typeof ResultIdRoute
   '/share/$id': typeof ShareIdRoute
   '/vote/$id': typeof VoteIdRoute
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/home'
     | '/mypage'
+    | '/spot'
     | '/result/$id'
     | '/share/$id'
     | '/vote/$id'
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/home'
     | '/mypage'
+    | '/spot'
     | '/result/$id'
     | '/share/$id'
     | '/vote/$id'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/home'
     | '/mypage'
+    | '/spot'
     | '/result/$id'
     | '/share/$id'
     | '/vote/$id'
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   CreateRoute: typeof CreateRoute
   HomeRoute: typeof HomeRoute
   MypageRoute: typeof MypageRoute
+  SpotRoute: typeof SpotRoute
   ResultIdRoute: typeof ResultIdRoute
   ShareIdRoute: typeof ShareIdRoute
   VoteIdRoute: typeof VoteIdRoute
@@ -151,6 +164,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MypageRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/spot': {
+      id: '/spot'
+      path: '/spot'
+      fullPath: '/spot'
+      preLoaderRoute: typeof SpotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/result/$id': {
       id: '/result/$id'
       path: '/result/$id'
@@ -180,6 +200,7 @@ const rootRouteChildren: RootRouteChildren = {
   CreateRoute: CreateRoute,
   HomeRoute: HomeRoute,
   MypageRoute: MypageRoute,
+  SpotRoute: SpotRoute,
   ResultIdRoute: ResultIdRoute,
   ShareIdRoute: ShareIdRoute,
   VoteIdRoute: VoteIdRoute,
