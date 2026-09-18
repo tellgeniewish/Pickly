@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ExternalLink, MapPin } from "lucide-react";
 import { z } from "zod";
-import { getSpotPlaceDetail } from "@/lib/kakao.functions";
+import { getKakaoMapJsKey, getSpotPlaceDetail } from "@/lib/kakao.functions";
 
 const searchSchema = z.object({
   name: z.string().catch(""),
@@ -30,11 +30,9 @@ export const Route = createFileRoute("/spot")({
   component: SpotDetail,
 });
 
-const JS_KEY = import.meta.env.VITE_KAKAO_JS_APP_KEY as string | undefined;
-
 let sdkPromise: Promise<void> | null = null;
-function loadKakaoSdk(): Promise<void> {
-  if (!JS_KEY) return Promise.reject(new Error("no_js_key"));
+function loadKakaoSdk(jsKey: string): Promise<void> {
+  if (!jsKey) return Promise.reject(new Error("no_js_key"));
   if ((window as any).kakao?.maps) return Promise.resolve();
   if (sdkPromise) return sdkPromise;
   sdkPromise = new Promise<void>((resolve, reject) => {
@@ -48,7 +46,7 @@ function loadKakaoSdk(): Promise<void> {
     const s = document.createElement("script");
     s.id = "kakao-maps-sdk";
     s.async = true;
-    s.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${JS_KEY}&libraries=services&autoload=false`;
+    s.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${jsKey}&libraries=services&autoload=false`;
     s.onload = onReady;
     s.onerror = () => reject(new Error("sdk_failed"));
     document.head.appendChild(s);
@@ -68,6 +66,13 @@ function SpotDetail() {
     queryFn: () => fetchDetail({ data: { name, lat, lng } }),
     enabled: !!name && hasCoords,
     staleTime: 10 * 60 * 1000,
+  });
+
+  const fetchJsKey = useServerFn(getKakaoMapJsKey);
+  const jsKeyQuery = useQuery({
+    queryKey: ["kakao-js-key"],
+    queryFn: () => fetchJsKey(),
+    staleTime: Infinity,
   });
 
   const detail = detailQuery.data?.detail ?? null;
@@ -115,7 +120,8 @@ function SpotDetail() {
           lng={detail?.lng ?? lng}
           name={detail?.placeName ?? name}
           staticMapDataUrl={detailQuery.data?.staticMapDataUrl ?? null}
-          loading={detailQuery.isLoading}
+          loading={detailQuery.isLoading || jsKeyQuery.isLoading}
+          jsKey={jsKeyQuery.data?.key ?? null}
         />
       )}
 
@@ -163,24 +169,27 @@ function SpotMap({
   name,
   staticMapDataUrl,
   loading,
+  jsKey,
 }: {
   lat: number;
   lng: number;
   name: string;
   staticMapDataUrl: string | null;
   loading: boolean;
+  jsKey: string | null;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<"idle" | "ready" | "error">("idle");
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!JS_KEY || !ref.current) {
-      setStatus("error");
+    if (!jsKey) {
+      if (!loading) setStatus("error");
       return;
     }
+    if (!ref.current) return;
     let cancelled = false;
-    loadKakaoSdk()
+    loadKakaoSdk(jsKey)
       .then(() => {
         if (cancelled || !ref.current) return;
         const kakao = (window as any).kakao;
@@ -200,7 +209,7 @@ function SpotMap({
     return () => {
       cancelled = true;
     };
-  }, [lat, lng, name, attempt]);
+  }, [lat, lng, name, attempt, jsKey, loading]);
 
   return (
     <section className="surface-card overflow-hidden">
