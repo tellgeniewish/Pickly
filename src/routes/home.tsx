@@ -126,7 +126,7 @@ function Home() {
                     <div className="absolute inset-0 bg-gradient-brand-soft flex items-center justify-center text-3xl">📍</div>
                   )}
                   <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-background/70 backdrop-blur text-[10px] font-semibold">
-                    🏆 {i + 1}위
+                    {medal} {i + 1}위
                   </div>
                 </div>
                 <div className="p-2.5">
@@ -141,8 +141,9 @@ function Home() {
                       </span>
                     ))}
                   </div>
+                  <p className="mt-2 text-[11px] text-primary font-medium">지도에서 보기 →</p>
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>
