@@ -27,7 +27,7 @@ export const Route = createFileRoute("/spot")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
-  component: SpotDetail;
+  component: SpotDetail,
 });
 
 const JS_KEY = import.meta.env.VITE_KAKAO_JS_APP_KEY as string | undefined;
