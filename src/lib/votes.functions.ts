@@ -492,7 +492,7 @@ export const getTopSpots = createServerFn({ method: "GET" }).handler(async () =>
   const { resolvePlaceName, fetchPlacePhoto } = await import("./kakao.server");
   const { generateSpotKeywords } = await import("./ai-analysis.server");
 
-  return Promise.all(
+  const spots = await Promise.all(
     scored.map(async (c): Promise<Spot> => {
       const name =
         (await resolvePlaceName(c.lat, c.lng)) ?? `${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`;
@@ -503,19 +503,29 @@ export const getTopSpots = createServerFn({ method: "GET" }).handler(async () =>
       const urls = (signed ?? []).map((s) => s.signedUrl);
       // Keywords may look at the user photos (server-side only), but the image we
       // expose is a photo OF THE PLACE — user photos are personal data.
-      const keywords = urls.length
-        ? await generateSpotKeywords({
-            placeName: name,
-            photos: topPhotos.map((p, i) => ({ imageUrl: urls[i] ?? "", likeRate: p.rate })).filter((p) => p.imageUrl),
-          })
-        : [];
+      // Place photo + keywords are independent lookups: run them together.
+      const [keywords, imageUrl] = await Promise.all([
+        urls.length
+          ? generateSpotKeywords({
+              placeName: name,
+              photos: topPhotos
+                .map((p, i) => ({ imageUrl: urls[i] ?? "", likeRate: p.rate }))
+                .filter((p) => p.imageUrl),
+            })
+          : Promise.resolve([] as string[]),
+        fetchPlacePhoto(name),
+      ]);
       return {
         name,
         likes: c.likes,
         recommend: Math.round(c.recommend * 100),
-        imageUrl: await fetchPlacePhoto(name),
+        imageUrl,
         keywords,
+        lat: c.lat,
+        lng: c.lng,
       };
     }),
   );
+  topSpotsCache = { at: Date.now(), data: spots };
+  return spots;
 });
