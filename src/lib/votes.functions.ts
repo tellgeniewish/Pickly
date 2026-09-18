@@ -407,16 +407,24 @@ export const getHomeStats = createServerFn({ method: "GET" }).handler(async () =
 // Representative photo: the highest-rated photo of that spot.
 // Keywords: Gemini, from the place name + top photos + their rates.
 // Votes that opted out of location usage are excluded entirely.
-export const getTopSpots = createServerFn({ method: "GET" }).handler(async () => {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+type Spot = {
+  name: string;
+  likes: number;
+  recommend: number;
+  imageUrl: string | null;
+  keywords: string[];
+  lat: number;
+  lng: number;
+};
 
-  type Spot = {
-    name: string;
-    likes: number;
-    recommend: number;
-    imageUrl: string | null;
-    keywords: string[];
-  };
+// Kakao reverse geocoding, place photos and Gemini keywords are slow (seconds).
+// The ranking only shifts as new votes come in, so serve a short-lived cache.
+const TOP_SPOTS_TTL_MS = 5 * 60 * 1000;
+let topSpotsCache: { at: number; data: Spot[] } | null = null;
+
+export const getTopSpots = createServerFn({ method: "GET" }).handler(async () => {
+  if (topSpotsCache && Date.now() - topSpotsCache.at < TOP_SPOTS_TTL_MS) return topSpotsCache.data;
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: allVotes } = await supabaseAdmin.from("votes").select("id, use_location");
   const eligible = (allVotes ?? []).filter((v) => v.use_location !== false);
