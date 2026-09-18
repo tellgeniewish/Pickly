@@ -159,3 +159,29 @@ export const getSpotEnrichments = createServerFn({ method: "POST" })
     return results;
   });
 
+
+// Spot detail for the "포토스팟 상세" screen. Coordinates are already known, so
+// this call only enriches the spot with addresses / Kakao Map place URL, plus a
+// server-rendered static map as a fallback when no JS map key is configured.
+export const getSpotPlaceDetail = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    z.object({ name: z.string().min(1).max(80), lat: z.number(), lng: z.number() }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { fetchPlaceDetail, fetchStaticMap } = await import("./kakao.server");
+    const [detail, staticMap] = await Promise.all([
+      fetchPlaceDetail(data.name, data.lat, data.lng),
+      fetchStaticMap(data.lat, data.lng),
+    ]);
+    return {
+      detail,
+      staticMapDataUrl: staticMap,
+      fallbackQueryUrl: `https://map.kakao.com/?q=${encodeURIComponent(data.name)}`,
+    };
+  });
+
+// Kakao Maps JavaScript key (JS 앱 키). Kept in server env and handed to the
+// client only when needed — never hardcoded in the bundle.
+export const getKakaoMapJsKey = createServerFn({ method: "GET" }).handler(async () => {
+  return { key: process.env["KAKAO_JS_APP_KEY"] || null };
+});

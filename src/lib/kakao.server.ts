@@ -180,3 +180,71 @@ export async function searchPlacesByKeyword(
   }
   return { places: [], error };
 }
+
+export interface PlaceDetail {
+  placeName: string;
+  roadAddress: string | null;
+  address: string | null;
+  placeUrl: string | null;
+  placeId: string | null;
+  lat: number;
+  lng: number;
+}
+
+/**
+ * Detail for a known spot: we already have accurate coordinates from EXIF
+ * clustering, so the keyword search is only used to enrich the spot with
+ * addresses + the Kakao Map place URL. Among several hits we pick the one
+ * closest to the stored coordinate instead of blindly taking the first.
+ */
+export async function fetchPlaceDetail(
+  name: string,
+  lat: number,
+  lng: number,
+): Promise<PlaceDetail | null> {
+  const params = new URLSearchParams({
+    query: name,
+    size: "10",
+    x: String(lng),
+    y: String(lat),
+    radius: "20000",
+    sort: "distance",
+  });
+  const j = await kakaoFetch(`/v2/local/search/keyword.json?${params.toString()}`);
+  const docs: any[] = j?.documents ?? [];
+  if (docs.length === 0) return null;
+  const { haversineMeters } = await import("./geo");
+  const best = docs
+    .map((d) => ({
+      d,
+      dist: haversineMeters({ lat, lng }, { lat: Number(d.y), lng: Number(d.x) }),
+    }))
+    .sort((a, b) => a.dist - b.dist)[0]!.d;
+  return {
+    placeName: String(best.place_name ?? name),
+    roadAddress: (best.road_address_name || null) as string | null,
+    address: (best.address_name || null) as string | null,
+    placeUrl: (best.place_url || null) as string | null,
+    placeId: (best.id ?? null) as string | null,
+    lat: Number(best.y) || lat,
+    lng: Number(best.x) || lng,
+  };
+}
+
+/** Kakao static map (REST, server-side key) used when no JS map key is configured. */
+export async function fetchStaticMap(lat: number, lng: number): Promise<string | null> {
+  const key = getKey();
+  if (!key) return null;
+  try {
+    const url = `${KAKAO_BASE}/v2/maps/staticmap?markers=type:d|size:mid|pos:${lng} ${lat}&level=4&MAPTYPE=ROADMAP&IW=640&IH=480`;
+    const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } });
+    if (!res.ok) return null;
+    const buf = new Uint8Array(await res.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]!);
+    const b64 = typeof btoa !== "undefined" ? btoa(bin) : Buffer.from(buf).toString("base64");
+    return `data:image/png;base64,${b64}`;
+  } catch {
+    return null;
+  }
+}

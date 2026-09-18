@@ -407,16 +407,24 @@ export const getHomeStats = createServerFn({ method: "GET" }).handler(async () =
 // Representative photo: the highest-rated photo of that spot.
 // Keywords: Gemini, from the place name + top photos + their rates.
 // Votes that opted out of location usage are excluded entirely.
-export const getTopSpots = createServerFn({ method: "GET" }).handler(async () => {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+type Spot = {
+  name: string;
+  likes: number;
+  recommend: number;
+  imageUrl: string | null;
+  keywords: string[];
+  lat: number;
+  lng: number;
+};
 
-  type Spot = {
-    name: string;
-    likes: number;
-    recommend: number;
-    imageUrl: string | null;
-    keywords: string[];
-  };
+// Kakao reverse geocoding, place photos and Gemini keywords are slow (seconds).
+// The ranking only shifts as new votes come in, so serve a short-lived cache.
+const TOP_SPOTS_TTL_MS = 5 * 60 * 1000;
+let topSpotsCache: { at: number; data: Spot[] } | null = null;
+
+export const getTopSpots = createServerFn({ method: "GET" }).handler(async () => {
+  if (topSpotsCache && Date.now() - topSpotsCache.at < TOP_SPOTS_TTL_MS) return topSpotsCache.data;
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const { data: allVotes } = await supabaseAdmin.from("votes").select("id, use_location");
   const eligible = (allVotes ?? []).filter((v) => v.use_location !== false);
@@ -484,7 +492,7 @@ export const getTopSpots = createServerFn({ method: "GET" }).handler(async () =>
   const { resolvePlaceName, fetchPlacePhoto } = await import("./kakao.server");
   const { generateSpotKeywords } = await import("./ai-analysis.server");
 
-  return Promise.all(
+  const spots = await Promise.all(
     scored.map(async (c): Promise<Spot> => {
       const name =
         (await resolvePlaceName(c.lat, c.lng)) ?? `${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`;
@@ -495,19 +503,29 @@ export const getTopSpots = createServerFn({ method: "GET" }).handler(async () =>
       const urls = (signed ?? []).map((s) => s.signedUrl);
       // Keywords may look at the user photos (server-side only), but the image we
       // expose is a photo OF THE PLACE — user photos are personal data.
-      const keywords = urls.length
-        ? await generateSpotKeywords({
-            placeName: name,
-            photos: topPhotos.map((p, i) => ({ imageUrl: urls[i] ?? "", likeRate: p.rate })).filter((p) => p.imageUrl),
-          })
-        : [];
+      // Place photo + keywords are independent lookups: run them together.
+      const [keywords, imageUrl] = await Promise.all([
+        urls.length
+          ? generateSpotKeywords({
+              placeName: name,
+              photos: topPhotos
+                .map((p, i) => ({ imageUrl: urls[i] ?? "", likeRate: p.rate }))
+                .filter((p) => p.imageUrl),
+            })
+          : Promise.resolve([] as string[]),
+        fetchPlacePhoto(name),
+      ]);
       return {
         name,
         likes: c.likes,
         recommend: Math.round(c.recommend * 100),
-        imageUrl: await fetchPlacePhoto(name),
+        imageUrl,
         keywords,
+        lat: c.lat,
+        lng: c.lng,
       };
     }),
   );
+  topSpotsCache = { at: Date.now(), data: spots };
+  return spots;
 });
